@@ -25,3 +25,4 @@ fragment-based algorithm for the discovery and design of antibacterial compounds
 * 14 - hit rate summary figure with fragments inset
 * 15 - crem code polished
 * 16 - crem and vae downselect
+* 17 - fragments compared to rationales
