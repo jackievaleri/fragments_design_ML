@@ -26,3 +26,7 @@ fragment-based algorithm for the discovery and design of antibacterial compounds
 * 15 - crem code polished
 * 16 - crem and vae downselect
 * 17 - fragments compared to rationales
+
+# ON DECK
+
+* SAR?
