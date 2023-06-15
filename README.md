@@ -1,5 +1,5 @@
-# Fragment-based drug discovery and design
-fragment-based algorithm for the discovery and design of antibacterial compounds
+# Fragment-based antibacterial drug design
+fragment-based algorithm for the design of antibacterial compounds
 
 # DONE
 
