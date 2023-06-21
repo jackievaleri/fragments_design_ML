@@ -4,3 +4,11 @@ models/NG/FINALbayHO11152022/fold_0/model_0/events.out.tfevents.1668624089.finge
 *.pt
 *.instance-1
 out/test_800k.csv
+*.ian-1
+*.gz
+data/gdb/gdb13_CNOSCl/10.smi
+data/gdb/gdb13_CNOSCl/11.smi
+data/gdb/gdb11_CNOF/10.smi
+data/gdb/gdb11_CNOF/11.smi
+data/gdb/gdb17/FDB-17-fragmentset.smi
+data/gdb/gdb17/GDB17.50000000.smi
