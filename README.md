@@ -8,17 +8,17 @@ fragment-based algorithm for the design of antibacterial compounds
 
 # IN PROGRESS
 * 04 - scatterplot with insets
-
-# TODO
 * 05 - in silico control
 * 06 - clean fragments pipeline
+* 13 - NG round1
+
+# TODO
 * 07 - pilot screen clean
 * 08 - round2
 * 09 - round3
 * 10 - round4
 * 11 - round5
 * 12 - round6
-* 13 - NG round1
 * 14 - hit rate summary figure with fragments inset
 * 15 - crem code polished
 * 16 - crem and vae downselect
