@@ -707,3 +707,17 @@ def filter_for_existing_mols(df, df_name_col, looking_for_presence, test_path, t
     df = df[keep_indices]
     return(df)
         
+#### Condensed version for controls ####
+
+def mini_algo(fragment_path, compound_path, result_path, fragment_smi_col = 'smiles', compound_smi_col = 'smiles', fragment_hit_col = 'hit', compound_hit_col = 'hit', fragment_score = 0.2, compound_score = 0.2, fragment_require_more_than_coh = True, fragment_remove_pains_brenk = 'both', compound_remove_pains_brenk = 'both', fragment_druglikeness_filter=[], compound_druglikeness_filter =[], fragment_remove_patterns=[]):
+    ##### part 1: process frags and compounds #####
+    print('\nProcessing fragments...')
+    df, mols, _ = process_dataset(frag_or_cpd='frag', path=fragment_path, score=fragment_score, smi_col=fragment_smi_col, hit_col=fragment_hit_col, require_more_than_coh=fragment_require_more_than_coh, remove_pains_brenk=fragment_remove_pains_brenk, druglikeness_filter=fragment_druglikeness_filter, remove_patterns=fragment_remove_patterns)
+    print('\nProcessing compounds...')
+    cpd_df, cpd_mols, full_cpd_df = process_dataset(frag_or_cpd='cpd', path=compound_path, score=compound_score, smi_col=compound_smi_col, hit_col=compound_hit_col, require_more_than_coh=False, remove_pains_brenk=compound_remove_pains_brenk, druglikeness_filter=compound_druglikeness_filter, remove_patterns=[])
+    print('\nMatching fragments in compounds...')
+        
+    ##### part 2: get all matching frag / molecule pairs #####
+    frag_match_indices, cpd_match_indices_lists = match_frags_and_mols(mols, cpd_mols)
+    rank_df = compile_results_into_df(df, cpd_df, mols, frag_match_indices, cpd_match_indices_lists, result_path)
+    return(rank_df)
