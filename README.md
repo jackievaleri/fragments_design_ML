@@ -3,14 +3,13 @@ fragment-based algorithm for the design of antibacterial compounds
 
 # DONE
 * 01 - fragments in known antibiotics (nitrofuran, fluoroquinolone, carbapenem)
+* 02 - GDB fragments t-SNE (GDB1 thru 17; GDB11+17+known antibiotics)
 * 03 - NG + SA train set venn diagram and NG + SA models on external val sets
 
-
 # IN PROGRESS
-* 02 - GDB fragments t-SNE (GDB1 thru 17; GDB11+17+known antibiotics)
+* 04 - scatterplot with insets
 
 # TODO
-* 04 - scatterplot with insets
 * 05 - in silico control
 * 06 - clean fragments pipeline
 * 07 - pilot screen clean
