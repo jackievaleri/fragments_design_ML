@@ -12,3 +12,7 @@ data/gdb/gdb11_CNOF/10.smi
 data/gdb/gdb11_CNOF/11.smi
 data/gdb/gdb17/FDB-17-fragmentset.smi
 data/gdb/gdb17/GDB17.50000000.smi
+out/model_preds_on_frags_and_cpds/SA/combined_broad_preds_05_20_2022.csv
+out/model_preds_on_frags_and_cpds/SA/FINISHED_combined_fragment_preds_05_24_2022.csv
+out/model_preds_on_frags_and_cpds/NG/broad800K_melis_predictions_with_FINALbayHO11152022_11_16_2022.csv
+out/model_preds_on_frags_and_cpds/NG/enamine_frags_18mil_with_FINALbayHO11152022_melis_predictions_11_18_2022.csv
