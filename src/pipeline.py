@@ -213,15 +213,15 @@ def check_for_complete_ring_fragments(frags, frag_match_indices, cpd_mols, cpd_m
             new_cpd_match_indices_lists.append(new_index_list)
     return(new_frag_match_indices, new_cpd_match_indices_lists)
 
-def compile_results_into_df(df, cpd_df, mols, frag_match_indices, cpd_match_indices_lists, result_path):
+def compile_results_into_df(df, cpd_df, mols, frag_match_indices, cpd_match_indices_lists, result_path, frag_hit_column, cpd_hit_column):
     rank_df = pd.DataFrame()
     rank_df['matched_fragments'] = frag_match_indices
     rank_df['fragment_SMILES'] = [mols[i].GetProp('SMILES') for i in list(rank_df['matched_fragments'])]
     rank_df['length_of_fragment'] = [mols[i].GetNumAtoms() for i in frag_match_indices]
     rank_df['matched_molecules'] = cpd_match_indices_lists
     rank_df['number_of_matched_molecules'] = [len(m) for m in cpd_match_indices_lists]
-    rank_df['fragment_scores'] = [df.iloc[i,list(df.columns).index('hit')] for i in frag_match_indices]
-    rank_df['full_molecule_scores'] = [[cpd_df.iloc[i,list(cpd_df.columns).index('hit')] for i in sublist] for sublist in cpd_match_indices_lists]
+    rank_df['fragment_scores'] = [df.iloc[i,list(df.columns).index(frag_hit_column)] for i in frag_match_indices]
+    rank_df['full_molecule_scores'] = [[cpd_df.iloc[i,list(cpd_df.columns).index(cpd_hit_column)] for i in sublist] for sublist in cpd_match_indices_lists]
     rank_df['average_molecule_score'] = [np.mean([float(x) for x in sublist]) for sublist in list(rank_df['full_molecule_scores'])]
 
     # save rank_df
@@ -709,15 +709,18 @@ def filter_for_existing_mols(df, df_name_col, looking_for_presence, test_path, t
         
 #### Condensed version for controls ####
 
-def mini_algo(fragment_path, compound_path, result_path, fragment_smi_col = 'smiles', compound_smi_col = 'smiles', fragment_hit_col = 'hit', compound_hit_col = 'hit', fragment_score = 0.2, compound_score = 0.2, fragment_require_more_than_coh = True, fragment_remove_pains_brenk = 'both', compound_remove_pains_brenk = 'both', fragment_druglikeness_filter=[], compound_druglikeness_filter =[], fragment_remove_patterns=[]):
+def mini_algo(fragment_path, compound_path, result_path, fragment_smi_col = 'smiles', compound_smi_col = 'smiles', fragment_hit_col = 'hit', compound_hit_col = 'hit', fragment_score = 0.2, compound_score = 0.2, fragment_require_more_than_coh = True, fragment_remove_pains_brenk = 'both', compound_remove_pains_brenk = 'both', fragment_druglikeness_filter=[], compound_druglikeness_filter =[], fragment_remove_patterns=[], frags_cannot_disrupt_rings=False):
     ##### part 1: process frags and compounds #####
     print('\nProcessing fragments...')
     df, mols, _ = process_dataset(frag_or_cpd='frag', path=fragment_path, score=fragment_score, smi_col=fragment_smi_col, hit_col=fragment_hit_col, require_more_than_coh=fragment_require_more_than_coh, remove_pains_brenk=fragment_remove_pains_brenk, druglikeness_filter=fragment_druglikeness_filter, remove_patterns=fragment_remove_patterns)
     print('\nProcessing compounds...')
-    cpd_df, cpd_mols, full_cpd_df = process_dataset(frag_or_cpd='cpd', path=compound_path, score=compound_score, smi_col=compound_smi_col, hit_col=compound_hit_col, require_more_than_coh=False, remove_pains_brenk=compound_remove_pains_brenk, druglikeness_filter=compound_druglikeness_filter, remove_patterns=[])
+    cpd_df, cpd_mols, _ = process_dataset(frag_or_cpd='cpd', path=compound_path, score=compound_score, smi_col=compound_smi_col, hit_col=compound_hit_col, require_more_than_coh=False, remove_pains_brenk=compound_remove_pains_brenk, druglikeness_filter=compound_druglikeness_filter, remove_patterns=[])
     print('\nMatching fragments in compounds...')
         
     ##### part 2: get all matching frag / molecule pairs #####
     frag_match_indices, cpd_match_indices_lists = match_frags_and_mols(mols, cpd_mols)
-    rank_df = compile_results_into_df(df, cpd_df, mols, frag_match_indices, cpd_match_indices_lists, result_path)
-    return(rank_df)
+    if frags_cannot_disrupt_rings:
+        # for all matching fragments, keep only matches that do not disrupt rings
+        frag_match_indices, cpd_match_indices_lists = check_for_complete_ring_fragments(mols, frag_match_indices, cpd_mols, cpd_match_indices_lists)
+    rank_df = compile_results_into_df(df, cpd_df, mols, frag_match_indices, cpd_match_indices_lists, result_path, frag_hit_column=fragment_hit_col, cpd_hit_column=compound_hit_col)
+    return(rank_df, cpd_df)
