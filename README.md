@@ -6,9 +6,9 @@ fragment-based algorithm for the design of antibacterial compounds
 * 02 - GDB fragments t-SNE (GDB1 thru 17; GDB11+17+known antibiotics)
 * 03 - NG + SA train set venn diagram and NG + SA models on external val sets
 * 04 - scatterplot with insets
+* 05 - in silico control
 
 # IN PROGRESS
-* 05 - in silico control
 * 06 - clean fragments pipeline
 * 13 - NG round1
 * 15 - crem code polished
