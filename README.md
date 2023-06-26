@@ -11,11 +11,11 @@ fragment-based algorithm for the design of antibacterial compounds
 
 # IN PROGRESS
 * 06 - pilot screen clean
+* 07 - round2
 * 12 - NG round1
 * 14 - crem code polished
 
 # TODO
-* 07 - round2
 * 08 - round3
 * 09 - round4
 * 10 - round5
