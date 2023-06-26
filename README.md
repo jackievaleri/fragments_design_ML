@@ -7,22 +7,22 @@ fragment-based algorithm for the design of antibacterial compounds
 * 03 - NG + SA train set venn diagram and NG + SA models on external val sets
 * 04 - scatterplot with insets
 * 05 - in silico control
+* xx - clean fragments pipeline
 
 # IN PROGRESS
-* 06 - clean fragments pipeline
-* 13 - NG round1
-* 15 - crem code polished
+* 06 - pilot screen clean
+* 12 - NG round1
+* 14 - crem code polished
 
 # TODO
-* 07 - pilot screen clean
-* 08 - round2
-* 09 - round3
-* 10 - round4
-* 11 - round5
-* 12 - round6
-* 14 - hit rate summary figure with fragments inset
-* 16 - crem and vae downselect
-* 17 - fragments compared to rationales
+* 07 - round2
+* 08 - round3
+* 09 - round4
+* 10 - round5
+* 11 - round6
+* 13 - hit rate summary figure with fragments inset
+* 15 - crem and vae downselect
+* 16 - fragments compared to rationales
 
 # ON DECK
 
