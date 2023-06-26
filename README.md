@@ -13,12 +13,13 @@ fragment-based algorithm for the design of antibacterial compounds
 * 06 - round1 pilot screen clean (need to run to verify)
 * 07 - round2 (need to run to verify)
 * 08 - round3 (need to run to verify)
+* 09 - round4 (need to run to verify)
+* 10 - round5 (need to run to verify)
 * 12 - NG round1 (need to run to verify)
 * 14 - crem code polished
 
 # TODO
-* 09 - round4
-* 10 - round5
+
 * 11 - round6
 * 13 - hit rate summary figure with fragments inset
 * 15 - crem and vae downselect
