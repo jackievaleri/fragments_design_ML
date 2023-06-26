@@ -10,13 +10,13 @@ fragment-based algorithm for the design of antibacterial compounds
 * xx - clean fragments pipeline
 
 # IN PROGRESS
-* 06 - pilot screen clean
-* 07 - round2
-* 12 - NG round1
+* 06 - round1 pilot screen clean (need to run to verify)
+* 07 - round2 (need to run to verify)
+* 08 - round3 (need to run to verify)
+* 12 - NG round1 (need to run to verify)
 * 14 - crem code polished
 
 # TODO
-* 08 - round3
 * 09 - round4
 * 10 - round5
 * 11 - round6
