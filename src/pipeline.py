@@ -4,6 +4,7 @@ import pandas as pd
 import scipy.stats as sp
 from tqdm.auto import tqdm
 from sklearn.cluster import AgglomerativeClustering
+import matplotlib.pyplot as plt
 
 import rdkit
 from rdkit import Chem
@@ -232,6 +233,21 @@ def compile_results_into_df(df, cpd_df, mols, frag_match_indices, cpd_match_indi
     display(rank_df.head(5))
     return(rank_df)
 
+def compile_frag_only_results_into_df(df, mols, result_path, frag_hit_column):
+    rank_df = pd.DataFrame()
+    rank_df['fragment_SMILES'] = [mol.GetProp('SMILES') for mol in mols]
+    rank_df['length_of_fragment'] = [mol.GetNumAtoms() for mol in mols]
+    rank_df['fragment_scores'] = [df.iloc[i,list(df.columns).index(frag_hit_column)] for i in range(len(mols))]
+    rank_df['matched_fragments'] = [i for i in range(len(mols))]
+
+    # save rank_df
+    rank_df = rank_df.sort_values('fragment_scores', ascending = False)
+    rank_df.to_csv(result_path + 'candidates_after_matching.csv', index = False)
+
+    print('Previewing dataframe so far...')
+    display(rank_df.head(5))
+    return(rank_df)
+
 ####### Filtering (abx, train set, toxicity) Functions #######
 
 def check_for_toxicity(df, fragment_column, frag_mols):
@@ -271,7 +287,7 @@ def check_for_toxicity(df, fragment_column, frag_mols):
     df['average_primary_tox_score_of_matched_molecules'] = [np.mean(sublist) for sublist in list(df['primary_tox_matched_molecule_values'])]
     return(df)
 
-def filter_out_toxicity(df, tox_thresh, fragment_index_column, frag_mols):
+def filter_out_toxicity(df, tox_thresh, fragment_index_column, frag_mols, toxicity_threshold_require_presence):
     df = check_for_toxicity(df, fragment_index_column, frag_mols)
     # do for those molecules with good tox or no tox
     keep_indices = []
@@ -279,11 +295,14 @@ def filter_out_toxicity(df, tox_thresh, fragment_index_column, frag_mols):
     for i, row in df.iterrows():
         hep = row['average_hepg2_tox_score_of_matched_molecules']
         prim = row['average_primary_tox_score_of_matched_molecules']
-
-        if np.isnan(hep) or np.isnan(prim):
-            keep_indices.append(i)
-        elif hep > tox_thresh and prim > tox_thresh:
-            keep_indices.append(i)
+        if not toxicity_threshold_require_presence:
+            if np.isnan(hep) or np.isnan(prim):
+                keep_indices.append(i)
+            elif hep > tox_thresh and prim > tox_thresh:
+                keep_indices.append(i)
+        else:
+            if hep > tox_thresh and prim > tox_thresh:
+                keep_indices.append(i)
     df = df.iloc[keep_indices,:]
     print('number of fragments passing both toxicity filters under ' + str(tox_thresh) + ': ' + str(len(df)))
     return(df)
@@ -355,11 +374,14 @@ def check_full_cpd_similarity_to_closest_train_set(df, full_cpd_index_column, cp
     df['tanimoto_scores_of_full_mols_to_nearest_train_set'] = tan_scores
     return(df)
 
-def check_training_set(train_set_path, train_set_smiles_col, train_set_name_col, df, fragment_index_column, frag_mols, full_cpd_index_column, cpd_mols):
+def check_training_set(train_set_path, train_set_smiles_col, train_set_name_col, df, fragment_index_column, frag_mols, full_cpd_index_column, cpd_mols, just_actives = False, hit_col = '', hit_thresh = 0):
     if train_set_path == '':
         print('No training set data have been provided for a comparison.')
         return(df)
     ts = pd.read_csv(train_set_path)
+    if just_actives:
+        ts = ts[ts[hit_col] < hit_thresh]
+        ts = ts.reset_index(drop=True)
     ts_mols = [Chem.MolFromSmiles(smi) for smi in list(ts[train_set_smiles_col])]
     keep_indices = [m is not None for m in ts_mols]
     ts = ts[keep_indices]
@@ -469,7 +491,7 @@ def find_cpds_with_and_without_frags_for_whole_list(df, full_cpd_df, compound_sm
     return(df)
     
 def threshold_on_stat_sign_analogues_with_and_without_frags(df, absolute_diff_thresh = 0, pval_diff_thresh = 0):
-    def threshold_on_column(df, col, diff_thresh):
+    def threshold_on_pval_column(df, col, diff_thresh):
         keep_indices = []
         for x in list(df[col]):
             if np.isnan(x[1]): # 1 element is the pval
@@ -478,12 +500,22 @@ def threshold_on_stat_sign_analogues_with_and_without_frags(df, absolute_diff_th
                 keep_indices.append(float(x[1]) < diff_thresh)
         df = df[keep_indices]
         return(df)
+    
+    def threshold_on_absval_column(df, col, diff_thresh):
+        keep_indices = []
+        for x in list(df[col]):
+            if np.isnan(x):
+                keep_indices.append(True)
+            else:
+                keep_indices.append(float(x) > diff_thresh)
+        df = df[keep_indices]
+        return(df)
 
     if pval_diff_thresh > 0:
-        df = threshold_on_column(df, 'ttest_scos_with_and_without_frag', pval_diff_thresh)
+        df = threshold_on_pval_column(df, 'ttest_scos_with_and_without_frag', pval_diff_thresh)
         print('number of fragments with <' + str(pval_diff_thresh) + ' (or n/a) stat significance between analogues w/ and w/o frag: ', len(df))
     if absolute_diff_thresh > 0:
-        df = threshold_on_column(df, 'average_difference_with_and_without_frag', absolute_diff_thresh)
+        df = threshold_on_absval_column(df, 'average_difference_with_and_without_frag', absolute_diff_thresh)
         print('number of fragments with >' + str(pval_diff_thresh) + ' (or n/a) absolute value difference between analogues w/ and w/o frag: ', len(df))
     return(df)
 
@@ -525,40 +557,43 @@ def draw_mols(mols, legends, file_path, cut_down_size = False, black_and_white =
     d2d.FinishDrawing()
     open(file_path,'wb+').write(d2d.GetDrawingText())
 
-def plot_final_fragments_with_all_info(df, output_folder, frags, cpd_mols, cpd_names, abx_mols, abx_names, ts_mols, ts_names, plot_neighborhoods = True):
+def plot_final_fragments_with_all_info(df, output_folder, frags, cpd_mols, cpd_names, abx_mols, abx_names, ts_mols, ts_names, display_inline_candidates, plot_neighborhoods = True):
 
     index = 0
     # just display one as an example
     for i, row in df.iterrows():
-        print('-------------------------------------------------------------------')
         frag_match_index = row['matched_fragments']
-        print('candidate: ', index)
-        print('SMILES: ', row['fragment_SMILES'])
-        print('fragment index: ' + str(frag_match_index))
-        display(frags[frag_match_index])
-        print('fragment score: ', np.round(row['fragment_scores'],3))
-        print('average matched molecule score: ', np.round(row['average_molecule_score'],3))
-        print('number of matched broad800k molecules: ', len(row['matched_molecules']))
-        print('average matched hepg2 growth: ', np.round(row['average_hepg2_tox_score_of_matched_molecules'],3))
-        print('average matched primary growth: ', np.round(row['average_primary_tox_score_of_matched_molecules'],3))
-        print('length of fragment: ', row['length_of_fragment'])
+        if display_inline_candidates:
+            print('-------------------------------------------------------------------')
+            print('candidate: ', index)
+            print('SMILES: ', row['fragment_SMILES'])
+            print('fragment index: ' + str(frag_match_index))
+            display(frags[frag_match_index])
+            print('fragment score: ', np.round(row['fragment_scores'],3))
+            print('average matched molecule score: ', np.round(row['average_molecule_score'],3))
+            print('number of matched broad800k molecules: ', len(row['matched_molecules']))
+            try:
+                print('average matched hepg2 growth: ', np.round(row['average_hepg2_tox_score_of_matched_molecules'],3))
+                print('average matched primary growth: ', np.round(row['average_primary_tox_score_of_matched_molecules'],3))
+            except:
+                continue
+            print('length of fragment: ', row['length_of_fragment'])
         abx_index_list = row['matched_antibiotics']
-        if len(abx_index_list) > 0:
+        if len(abx_index_list) > 0 and display_inline_candidates:
             print('matching abx')
             img=Draw.MolsToGridImage([m for i,m in enumerate(abx_mols) if i in abx_index_list], molsPerRow=10,maxMols=100, legends = [str(abx_names[i]) for i in abx_index_list])
             display(img)
-        else:
+        elif display_inline_candidates:
             print('no matching abx found')
             
         ts_index_list = row['matched train set molecules']
-        if len(ts_index_list) > 0:
+        if len(ts_index_list) > 0 and display_inline_candidates:
             print('matching train set compounds')
             img=Draw.MolsToGridImage([m for i,m in enumerate(ts_mols) if i in ts_index_list], molsPerRow=10,maxMols=100, legends = [str(ts_names[i]) for i in ts_index_list])
             display(img)
-        else:
+        elif display_inline_candidates:
             print('no matching train set molecules found')
         
-        print('matching broad800k molecules')
         full_mol_index_list = row['matched_molecules']
         if len(full_mol_index_list) > 0:
             curr_match_names = [cpd_names[i] for i in full_mol_index_list]
@@ -569,34 +604,41 @@ def plot_final_fragments_with_all_info(df, output_folder, frags, cpd_mols, cpd_n
             curr_match_scores, curr_tan_abxs, curr_tan_tss, curr_match_mol_index_list, curr_match_names = zip(*sorted(zip(curr_match_scores, curr_tan_abxs, curr_tan_tss, full_mol_index_list, curr_match_names), reverse = True))
             curr_match_mols = [m for i,m in enumerate(cpd_mols) if i in curr_match_mol_index_list]
             legends = [n + ', ' + str(np.round(sc, 3)) + '\n tan score to closest abx: ' + str(np.round(ta, 3)) + '\n tan score to closest TS: ' + str(np.round(tt, 3)) for n,sc,ta,tt in zip(curr_match_names, curr_match_scores, curr_tan_abxs, curr_tan_tss)]
-            img=Draw.MolsToGridImage(curr_match_mols, molsPerRow=5,maxMols=500, legends = legends)
-            display(img)
+            if display_inline_candidates:
+                print('matching broad800k molecules')
+                img=Draw.MolsToGridImage(curr_match_mols, molsPerRow=5,maxMols=500, legends = legends)
+                display(img)
             draw_mols(curr_match_mols, legends, output_folder + str(index) + '_' + row['fragment_SMILES'] + '.png', cut_down_size = True)
         else:
-            print('no matching broad800k molecules found')
+            if display_inline_candidates:
+                print('no matching broad800k molecules found')
 
         if plot_neighborhoods:
-            print('random sampling of cpds with and without frag:')
+            if display_inline_candidates:
+                print('random sampling of cpds with and without frag:')
             cpds_w_frag = list(row['random_analogue_cpds_w_frag'])
             scos_w_frag = list(row['random_analogue_scos_w_frag'])
             cpds_wo_frag = list(row['random_analogue_cpds_without_frag'])
             scos_wo_frag = list(row['random_analogue_scos_without_frag'])
 
             if len(cpds_w_frag) > 1 and len(cpds_wo_frag) > 1:
-                print('avg difference of analogues with and without frag: ', np.round(row['average_difference_with_and_without_frag'],3))
-                print('t test of analogues with and without frag: ', row['ttest_scos_with_and_without_frag'])
-                print('random analogues with frag:')
                 ana_w_frag_legends = [str(np.round(x,3)) for x in scos_w_frag]
-                display(Draw.MolsToGridImage(cpds_w_frag, legends = ana_w_frag_legends))
+                if display_inline_candidates:
+                    print('avg difference of analogues with and without frag: ', np.round(row['average_difference_with_and_without_frag'],3))
+                    print('t test of analogues with and without frag: ', row['ttest_scos_with_and_without_frag'])
+                    print('random analogues with frag:')
+                    display(Draw.MolsToGridImage(cpds_w_frag, legends = ana_w_frag_legends))
                 draw_mols(cpds_w_frag, ana_w_frag_legends, output_folder + str(index) + '_random_mols_with_frag.png', cut_down_size = True)
 
-                print('random analogues without frag:')
                 ana_wo_frag_legends = [str(np.round(x,3)) for x in scos_wo_frag]
-                display(Draw.MolsToGridImage(cpds_wo_frag, legends = ana_wo_frag_legends))
+                if display_inline_candidates:
+                    print('random analogues without frag:')
+                    display(Draw.MolsToGridImage(cpds_wo_frag, legends = ana_wo_frag_legends))
                 draw_mols(cpds_wo_frag, ana_wo_frag_legends, output_folder + str(index) + '_random_mols_without_frag.png', cut_down_size = True)
 
             else:
-                print('not enough matching analogues found')
+                if display_inline_candidates:
+                    print('not enough matching analogues found')
 
         index = index + 1
 
@@ -687,6 +729,46 @@ def cluster_mols_based_on_fragments(df, compound_smi_col, cpd_name_col, frags, r
     df = extract_legends_and_plot(df, mols, plot_suffix='cluster.png', path=folder, murcko_scaffold=True, num_clusters = int(len(df)/5))
     return(df)
 
+def determine_optimal_clustering_number(df, max_num_clusters, smi_col):
+
+    df['row_num'] = list(range(len(df)))
+    df = df.drop_duplicates(subset=smi_col)
+    smis = list(df[smi_col])
+    mols = [Chem.MolFromSmiles(mol) for mol in smis]
+    murcks = [MurckoScaffold.GetScaffoldForMol(mol) for mol in mols]
+    fps = [AllChem.GetMorganFingerprintAsBitVect(x,2,1024) for x in murcks]
+    
+    max_dists = []
+    avg_dists = []
+    print(max_num_clusters)
+    for number_of_clusters in range(1, max_num_clusters):
+        raw_cluster_labels, final_clusters=clusterFps(fps,num_clusters=number_of_clusters)
+        max_dist = []
+        avg_dist = []
+        for cluster_key in final_clusters:
+            cluster_mols = final_clusters[cluster_key]
+            cluster_mols = [mols[i] for i in cluster_mols]
+            
+            # get similarities
+            #cluster_murcks = [MurckoScaffold.GetScaffoldForMol(mol) for mol in cluster_mols]
+            cluster_fps = [AllChem.GetMorganFingerprintAsBitVect(x,2,1024) for x in cluster_mols]
+            tan_array = [DataStructs.BulkTanimotoSimilarity(i, cluster_fps) for i in cluster_fps]
+            flattened_tan_array = [item for sublist in tan_array for item in sublist]
+            avg_dist.append(np.mean(flattened_tan_array))
+            max_dist.append(np.min(flattened_tan_array))
+        max_dists.append(np.average(max_dist))
+        avg_dists.append(np.average(avg_dist))
+    plt.scatter(list(range(1,max_num_clusters)), max_dists)
+    plt.xlabel('Number of Clusters')
+    plt.ylabel('Average of Minimum Similarity Within Cluster')
+    plt.show()
+    plt.scatter(list(range(1,max_num_clusters)), avg_dists)
+    plt.xlabel('Number of Clusters')
+    plt.ylabel('Average of Mean Similarity Within Cluster')
+    plt.show()
+
+    return(df, max_dists)
+
 #### Additional Filtering #####
 
 def filter_for_existing_mols(df, df_name_col, looking_for_presence, test_path, test_name_col, test_name_needs_split):
@@ -706,7 +788,148 @@ def filter_for_existing_mols(df, df_name_col, looking_for_presence, test_path, t
         keep_indices = [n not in test_names for n in list(df[df_name_col])]
     df = df[keep_indices]
     return(df)
+
+def deduplicate_on_similar_pairs(selected_mols_df, thresh = 0.9, compound_smi_col = 'SMILES', compound_hit_col = 'hit'):
+    test1_cpds = [Chem.RDKFingerprint(Chem.MolFromSmiles(smi)) for smi in list(selected_mols_df[compound_smi_col])]
+    dup_pairs = {}
+    cpds_to_remove = [] # let's remove those with the lower predicted activity score (so close anyways, but needed some way to decide)
+    for i, test1 in enumerate(test1_cpds):
+        for j, test2 in enumerate(test1_cpds):
+            add_on = False
+            sim = DataStructs.FingerprintSimilarity(test1,test2)
+            if sim > thresh and i != j:
+                try:
+                    if dup_pairs[i] is not j:
+                        add_on = True
+                except:
+                    add_on = True             
+            if add_on:
+                dup_pairs[i] = j
+                dup_pairs[j] = i
+                score_i = list(selected_mols_df[[x is i for x in list(range(len(selected_mols_df)))]][compound_hit_col])[0]
+                score_j = list(selected_mols_df[[x is j for x in list(range(len(selected_mols_df)))]][compound_hit_col])[0]
+                if score_i < score_j:
+                    cpds_to_remove.append(i)
+                else:
+                    cpds_to_remove.append(j)
+    dedup_selected_mols_df = selected_mols_df[[x not in cpds_to_remove for x in list(range(len(selected_mols_df)))]]
+    return(dedup_selected_mols_df)
         
+#### Actual algorithm ####
+
+def run_pipeline(fragment_path, compound_path, result_path, fragment_smi_col = 'smiles', compound_smi_col = 'smiles', fragment_hit_col = 'hit', compound_hit_col = 'hit', fragment_score = 0.2, compound_score = 0.2, fragment_require_more_than_coh = True, fragment_remove_pains_brenk = 'both', compound_remove_pains_brenk = 'both', fragment_druglikeness_filter = [], compound_druglikeness_filter = [], fragment_remove_patterns = [], frags_cannot_disrupt_rings = True, fragment_length_threshold = 0, toxicity_threshold_if_present = 0, toxicity_threshold_require_presence = False, abx_path = '', abx_smiles_col = 'smiles', abx_name_col = 'Name', train_set_path = '', train_set_smiles_col = 'smiles', train_set_name_col = 'Name', analogues_pval_diff_thresh = 0, analogues_absolute_diff_thresh = 0, cpd_name_col = 'Name', display_inline_candidates=False, purch_path='', purch_name_col='Name', purch_name_needs_split=False, tested_before_path='', tested_before_name_col='Name', tested_before_name_needs_split=False, cpd_sim_to_abx=0, cpd_sim_to_train_set=0):
+
+    ##### part 1: process frags and compounds #####
+    print('\nProcessing fragments...')
+    df, mols, _ = process_dataset(frag_or_cpd='frag', path=fragment_path, score=fragment_score, smi_col=fragment_smi_col, hit_col=fragment_hit_col, require_more_than_coh=fragment_require_more_than_coh, remove_pains_brenk=fragment_remove_pains_brenk, remove_patterns=fragment_remove_patterns, druglikeness_filter=fragment_druglikeness_filter)
+    print('\nProcessing compounds...')
+    cpd_df, cpd_mols, full_cpd_df = process_dataset(frag_or_cpd='cpd', path=compound_path, score=compound_score, smi_col=compound_smi_col, hit_col=compound_hit_col, require_more_than_coh=False, remove_pains_brenk=compound_remove_pains_brenk, remove_patterns=[], druglikeness_filter=compound_druglikeness_filter)
+    print('\nMatching fragments in compounds...')
+        
+    ##### part 2: get all matching frag / molecule pairs #####
+    frag_match_indices, cpd_match_indices_lists = match_frags_and_mols(mols, cpd_mols)
+    if frags_cannot_disrupt_rings:
+        # for all matching fragments, keep only matches that do not disrupt rings
+        frag_match_indices, cpd_match_indices_lists = check_for_complete_ring_fragments(mols, frag_match_indices, cpd_mols, cpd_match_indices_lists)
+    rank_df = compile_results_into_df(df, cpd_df, mols, frag_match_indices, cpd_match_indices_lists, result_path, fragment_hit_col, compound_hit_col)
+
+    ##### part 3: add additional data and filters #####
+    # check for frags associated with toxicity in the in-house tox database
+    rank_df = filter_out_toxicity(rank_df, toxicity_threshold_if_present, 'matched_fragments', mols, toxicity_threshold_require_presence)
+    # check for frags within abx or cpds close to known abx - does not remove any cpds
+    if abx_path !='':
+        rank_df, abx_mols, abx_names = check_abx(abx_path, abx_smiles_col, abx_name_col, rank_df, 'matched_fragments', mols, 'matched_molecules', cpd_mols)
+    # check for frags within train set or molecules close to train set - again does not remove cpds
+    if train_set_path !='':
+        rank_df, ts_mols, ts_names = check_training_set(train_set_path, train_set_smiles_col, train_set_name_col, rank_df, 'matched_fragments', mols, 'matched_molecules', cpd_mols)
+    # check for fragments at least bigger than fragment_length_threshold
+    rank_df = rank_df[rank_df['length_of_fragment'] > fragment_length_threshold]
+
+    ##### part 4: statistical significance on analogues test #####
+    if analogues_pval_diff_thresh > 0 or analogues_absolute_diff_thresh > 0: 
+        print('Checking analogues of compounds with and without fragments...')
+        rank_df = find_cpds_with_and_without_frags_for_whole_list(rank_df, full_cpd_df, compound_smi_col, compound_hit_col, 'matched_fragments', mols, 'matched_molecules', cpd_mols)
+        rank_df = threshold_on_stat_sign_analogues_with_and_without_frags(rank_df, pval_diff_thresh=analogues_pval_diff_thresh, absolute_diff_thresh=analogues_absolute_diff_thresh)
+
+    ##### part 5: visualization #####
+    # save rank_df
+    rank_df = rank_df.sort_values('number_of_matched_molecules', ascending = False)
+    rank_df.to_csv(result_path + 'candidates_after_matching_and_filtering.csv', index = False)
+
+    # group fragments and see clusters
+    frag_folder = result_path + 'fragment_clusters/'
+    os.mkdir(frag_folder)
+    fragment_mols_for_plotting = add_legends_to_fragments(rank_df, smiles_column = 'fragment_SMILES')
+    rank_df = extract_legends_and_plot(rank_df, fragment_mols_for_plotting, plot_suffix='cluster.png', path=frag_folder, murcko_scaffold=False, num_clusters = int(len(rank_df)/5))
+    rank_df.to_csv(frag_folder + 'finalmols.csv', index = False)
+        
+    # draw all fragments
+    draw_mols([mols[i] for i in list(rank_df['matched_fragments'])], [str(i) for i in range(0, len(rank_df))], result_path + 'ALL_FRAGMENT_MOLS.png', cut_down_size = False)
+
+    # look at molecules corresponding to fragments
+    cpd_names = list(cpd_df[cpd_name_col])
+    candidate_folder = result_path + 'candidate_info/'
+    os.mkdir(candidate_folder)
+    plot_final_fragments_with_all_info(rank_df, candidate_folder, mols, cpd_mols, cpd_names, abx_mols, abx_names, ts_mols, ts_names, display_inline_candidates)        
+
+    ##### part 6: save relevant information #####
+    # get the final matching molecules for saving
+    all_matching_mol_indices = [x for l in list(rank_df['matched_molecules']) for x in l]
+    all_matching_mol_indices = list(set(all_matching_mol_indices)) # deduplicate
+    print('final number of molecules to test: ', len(all_matching_mol_indices))
+
+    # save the names
+    all_matching_mols = [cpd_names[i] for i in list(set(all_matching_mol_indices))]
+    cpd_smiles = list(cpd_df[compound_smi_col])
+    all_matching_smis = [cpd_smiles[i] for i in list(set(all_matching_mol_indices))]
+
+    # and save the final molecules to df
+    all_matching_mols_df = pd.DataFrame()
+    all_matching_mols_df[cpd_name_col] = all_matching_mols
+    all_matching_mols_df[compound_smi_col] = all_matching_smis
+
+    # add metadata to mols
+    cpd_df_meta = cpd_df[[cpd_name_col, compound_hit_col]]
+    all_matching_mols_df = all_matching_mols_df.merge(cpd_df_meta, on = cpd_name_col)
+    all_matching_mols_df.to_csv(result_path + 'candidate_compounds_after_matching_and_filtering_with_metadata.csv')
+
+    ##### part 7: additional filtering #####
+    # keep only molecules IN the PURCHASABLE Broad800K library
+    if purch_path != '':
+        all_matching_mols_df = filter_for_existing_mols(all_matching_mols_df, cpd_name_col, looking_for_presence=True, test_path=purch_path, test_name_col=purch_name_col, test_name_needs_split=purch_name_needs_split)
+        print('length of df with purchasable mols: ', len(all_matching_mols_df))
+    if tested_before_path !='':
+        # make only molecules NOT IN previously-tested dataframes (make sure none of the molecules are exact matches to those tested before)
+        all_matching_mols_df = filter_for_existing_mols(all_matching_mols_df, cpd_name_col, looking_for_presence=False, test_path=tested_before_path, test_name_col=tested_before_name_col, test_name_needs_split=tested_before_name_needs_split)
+        print('length of df that has not been tested before: ', len(all_matching_mols_df))
+
+    # now do tanimoto filtering on antibiotics and training set
+    current_all_matching_mols = [Chem.MolFromSmiles(smi) for smi in list(all_matching_mols_df[compound_smi_col])]
+    all_matching_mols_df['tan to nearest abx'] = for_mol_list_get_lowest_tanimoto_to_closest_mol(current_all_matching_mols, abx_mols)
+    all_matching_mols_df['tan to nearest ts'] = for_mol_list_get_lowest_tanimoto_to_closest_mol(current_all_matching_mols, ts_mols)
+
+    if cpd_sim_to_abx > 0:
+        all_matching_mols_df = all_matching_mols_df[all_matching_mols_df['tan to nearest abx'] < cpd_sim_to_abx]
+        print('length of all preds with tan abx < ' + str(cpd_sim_to_abx) + ': ', len(all_matching_mols_df))
+    if cpd_sim_to_train_set > 0:
+        all_matching_mols_df = all_matching_mols_df[all_matching_mols_df['tan to nearest ts'] < cpd_sim_to_train_set]
+        print('length of all preds with tan ts < ' + str(cpd_sim_to_train_set) + ': ', len(all_matching_mols_df))
+
+    ##### part 8: final round of visualization #####
+    # cluster molecules based on fragment they have
+    frags = [Chem.MolFromSmiles(smi) for smi in list(rank_df['fragment_SMILES'])]   
+    all_matching_mols_df = cluster_mols_based_on_fragments(all_matching_mols_df, compound_smi_col, cpd_name_col, frags, result_path)
+    rank_df.to_csv(result_path + 'FINAL_fragments_with_metadata.csv', index = False)
+        
+    # group fragments and see clusters
+    final_folder = result_path + 'FINAL_mols_after_all_thresholding/'
+    os.mkdir(final_folder)
+    mols = add_legends_to_compounds(all_matching_mols_df, smiles_column = compound_smi_col, name_column = cpd_name_col)
+    df = extract_legends_and_plot(all_matching_mols_df, mols, 'cluster.png', path=final_folder, murcko_scaffold=True, num_clusters = int(len(all_matching_mols_df)/5))
+    all_matching_mols_df.to_csv(final_folder + 'final_proposed_molecules_to_order.csv')
+
+    return(all_matching_mols_df)
+
 #### Condensed version for controls ####
 
 def mini_algo(fragment_path, compound_path, result_path, fragment_smi_col = 'smiles', compound_smi_col = 'smiles', fragment_hit_col = 'hit', compound_hit_col = 'hit', fragment_score = 0.2, compound_score = 0.2, fragment_require_more_than_coh = True, fragment_remove_pains_brenk = 'both', compound_remove_pains_brenk = 'both', fragment_druglikeness_filter=[], compound_druglikeness_filter =[], fragment_remove_patterns=[], frags_cannot_disrupt_rings=False):
@@ -724,3 +947,169 @@ def mini_algo(fragment_path, compound_path, result_path, fragment_smi_col = 'smi
         frag_match_indices, cpd_match_indices_lists = check_for_complete_ring_fragments(mols, frag_match_indices, cpd_mols, cpd_match_indices_lists)
     rank_df = compile_results_into_df(df, cpd_df, mols, frag_match_indices, cpd_match_indices_lists, result_path, frag_hit_column=fragment_hit_col, cpd_hit_column=compound_hit_col)
     return(rank_df, cpd_df)
+
+
+##### Frgament alone algorithm #####
+
+def run_frag_only_pipeline(fragment_path, result_path, fragment_smi_col='smiles', fragment_hit_col='hit', fragment_score=0.2, fragment_require_more_than_coh=True, fragment_remove_pains_brenk='both', fragment_druglikeness_filter=[], fragment_remove_patterns=[], fragment_length_threshold=0, toxicity_threshold_if_present=0, toxicity_threshold_require_presence=False):
+    ##### part 1: process frags #####
+    print('\nProcessing fragments...')
+    df, mols, _ = process_dataset(frag_or_cpd='frag', path=fragment_path, score=fragment_score, smi_col=fragment_smi_col, hit_col=fragment_hit_col, require_more_than_coh=fragment_require_more_than_coh, remove_pains_brenk=fragment_remove_pains_brenk, remove_patterns=fragment_remove_patterns, druglikeness_filter=fragment_druglikeness_filter)
+
+    ##### part 2: compile into df #####
+    rank_df = compile_frag_only_results_into_df(df, mols, result_path, fragment_hit_col)
+
+    ##### part 3: add additional data and filters #####
+    # check for frags associated with toxicity in the in-house tox database
+    rank_df = filter_out_toxicity(rank_df, toxicity_threshold_if_present, 'matched_fragments', mols, toxicity_threshold_require_presence)
+    # check for fragments at least bigger than fragment_length_threshold
+    rank_df = rank_df[rank_df['length_of_fragment'] > fragment_length_threshold]
+
+    ##### part 4: visualization #####
+    # group fragments and see clusters
+    frag_folder = result_path + 'fragment_clusters/'
+    os.mkdir(frag_folder)
+    fragment_mols_for_plotting = add_legends_to_fragments(rank_df, smiles_column = 'fragment_SMILES')
+    rank_df = extract_legends_and_plot(rank_df, fragment_mols_for_plotting, plot_suffix='cluster.png', path=frag_folder, murcko_scaffold=False, num_clusters = int(len(rank_df)/5))
+    rank_df.to_csv(frag_folder + 'finalmols.csv', index = False)
+        
+    # draw all fragments
+    draw_mols([mols[i] for i in list(rank_df['matched_fragments'])], [str(i) for i in range(0, len(rank_df))], result_path + 'ALL_FRAGMENT_MOLS.png', cut_down_size = False)
+
+    return(rank_df)
+
+def process_fragments_after_receiving_available_compounds(final_frags_path, new_cpds_path, result_path, fragment_hit_col = 'hit', compound_score=0.1, compound_smi_col='SMILES', compound_hit_col='hit', compound_remove_pains_brenk='both', compound_druglikeness_filter=[], hepg2_frag_col = '', hepg2_frag_tox_cutoff = 0.2, prim_frag_col = '', prim_frag_tox_cutoff = 0.2, hepg2_cpd_col = '', prim_cpd_col = '', abx_path = '', abx_smiles_col = 'smiles', abx_name_col = 'Name', train_set_path = '', train_set_smiles_col = 'smiles', train_set_name_col = 'Name', train_set_just_actives = False, train_set_hit_col = '', train_set_thresh = 0):
+    ##### part 1: read back in fragments - these have already been processed
+    df = pd.read_csv(final_frags_path)
+    
+    ##### part 2: filter on additional fragment characteristics before matching
+    #from crem_pipeline import calculateScoreThruToxModel
+    if hepg2_frag_tox_cutoff > 0:
+        #_, hepg2_toxs = calculateScoreThruToxModel(list(df['fragment_SMILES']), result_path, 'temp_predictions.csv', 'hepg2')
+        #df['hepg2_frag_col']= hepg2_toxs
+        df = df[df[hepg2_frag_col] < hepg2_frag_tox_cutoff]
+        print('length of all frags with HepG2 tox < ' + str(hepg2_frag_tox_cutoff) + ': ', len(df))   
+    if prim_frag_tox_cutoff > 0:
+        #_, prim_toxs = calculateScoreThruToxModel(list(df['fragment_SMILES']), result_path, 'temp_predictions.csv', 'primary')
+        #df['prim_frag_col']= prim_toxs
+        df = df[df[prim_frag_col] < prim_frag_tox_cutoff]
+        print('length of all frags with Primary tox < ' + str(prim_frag_tox_cutoff) + ': ', len(df))
+    mols = [Chem.MolFromSmiles(smi) for smi in list(df['fragment_SMILES'])]
+    df, mols = keep_valid_molecules(df, 'fragment_SMILES')
+    
+    ##### part 3: process new cpds dataframe
+    cpd_df, cpd_mols, _ = process_dataset(frag_or_cpd='cpd', path=new_cpds_path, score=compound_score, smi_col=compound_smi_col, hit_col=compound_hit_col, require_more_than_coh=False, remove_pains_brenk=compound_remove_pains_brenk, druglikeness_filter=compound_druglikeness_filter, remove_patterns=[])
+
+    ##### part 4: matching
+    frag_match_indices, cpd_match_indices_lists = match_frags_and_mols(mols, cpd_mols)
+    # for all matching fragments, keep only matches that do not disrupt rings
+    frag_match_indices, cpd_match_indices_lists = check_for_complete_ring_fragments(mols, frag_match_indices, cpd_mols, cpd_match_indices_lists)
+    # make df
+    rank_df = compile_results_into_df(df, cpd_df, mols, frag_match_indices,cpd_match_indices_lists, result_path, frag_hit_column=fragment_hit_col, cpd_hit_column=compound_hit_col)
+
+    ##### part 5: save relevant compound information #####
+    # get the final matching molecules for saving
+    all_matching_mol_indices = [x for l in list(rank_df['matched_molecules']) for x in l]
+    all_matching_mol_indices = list(set(all_matching_mol_indices)) # deduplicate
+    print('final number of molecules to test: ', len(all_matching_mol_indices))
+
+    # save the names
+    cpd_smiles = list(cpd_df[compound_smi_col])
+    all_matching_smis = [cpd_smiles[i] for i in list(set(all_matching_mol_indices))]
+
+    # and save the final molecules to df
+    all_matching_mols_df = pd.DataFrame()
+    all_matching_mols_df[compound_smi_col] = all_matching_smis
+
+    # add metadata to mols
+    cpd_df_meta = pd.read_csv(new_cpds_path)
+    all_matching_mols_df = all_matching_mols_df.merge(cpd_df_meta, on = compound_smi_col)
+    all_matching_mols_df.to_csv(result_path + 'candidate_compounds_after_matching_and_filtering_with_metadata.csv')
+
+    # add info about the matching fragments - on the molecule side
+    matching_frag_indices = []
+    # find the fragments they match to
+    for i, mol in enumerate([Chem.MolFromSmiles(smi) for smi in list(all_matching_mols_df[compound_smi_col])]):
+        frag_indices = []
+        for j, frag in enumerate([Chem.MolFromSmiles(smi) for smi in list(rank_df['fragment_SMILES'])]): # only works bc all smiles make valid mols
+            if mol.HasSubstructMatch(frag):
+                frag_indices.append(j) 
+        matching_frag_indices.append(frag_indices)
+    all_matching_mols_df['matching_frags'] = matching_frag_indices
+
+    # now do tanimoto filtering on antibiotics and training set
+    rank_df, abx_mols, abx_names = check_abx(abx_path, abx_smiles_col, abx_name_col, rank_df, 'matched_fragments', mols, 'matched_molecules', cpd_mols)
+    # check for frags within train set or molecules close to train set - again does not remove cpds
+    rank_df, ts_mols, ts_names = check_training_set(train_set_path, train_set_smiles_col, train_set_name_col, rank_df, 'matched_fragments', mols, 'matched_molecules', cpd_mols, just_actives=train_set_just_actives, hit_col = train_set_hit_col, hit_thresh = train_set_thresh)
+    
+    current_all_matching_mols = [Chem.MolFromSmiles(smi) for smi in list(all_matching_mols_df[compound_smi_col])]
+    all_matching_mols_df['tanimoto_scores_of_full_mols_to_nearest_abx'] = for_mol_list_get_lowest_tanimoto_to_closest_mol(current_all_matching_mols, abx_mols)
+    all_matching_mols_df['tanimoto_scores_of_full_mols_to_nearest_train_set'] = for_mol_list_get_lowest_tanimoto_to_closest_mol(current_all_matching_mols, ts_mols)
+
+    return(all_matching_mols_df)
+
+def check_full_cpd_similarity_to_closest_selected_mols(df, selected_mols_df, compound_smi_col):
+    if len(df) == 0:
+        return([])
+    if len(selected_mols_df) == 0:
+        return([0] * len(df))
+    df_mols = [Chem.MolFromSmiles(smi) for smi in list(df[compound_smi_col])]
+    selected_mols = [Chem.MolFromSmiles(smi) for smi in list(selected_mols_df[compound_smi_col])]
+    tan_scores = for_mol_list_get_lowest_tanimoto_to_closest_mol(df_mols, selected_mols)
+    return(tan_scores)
+
+def perform_filtering_algo(all_matching_mols_df, compound_smi_col, compound_hit_col, hepg2_cpd_col, prim_cpd_col): # assumes a lot of information about hardcoded column names
+    # go thru each fragment and pick best compound from that
+    all_matching_mols_df['matching_frags_strings'] = [str(x) for x in list(all_matching_mols_df['matching_frags'])]
+    selected_mols_df = pd.DataFrame()
+    total_groups = 0
+    # if all filtering steps leave 1 compound, keep that 1 compound
+    # if all filtering steps leave 0 compounds, leave out the filtering steps that remove the 1 remaining compound
+    # if all filtering steps leave >1 compound, all them to a list for another round of selection
+    for frag_i, smalldf in all_matching_mols_df.groupby('matching_frags_strings'):
+        total_groups = total_groups + 1
+        selected_fragment = False
+        smalldf['tanimoto_scores_to_already_selected_mols'] = check_full_cpd_similarity_to_closest_selected_mols(smalldf, selected_mols_df, compound_smi_col)
+        smalldf = smalldf.sort_values('tanimoto_scores_to_already_selected_mols', ascending = True)
+        for i, row in smalldf.iterrows():
+            if row['tanimoto_scores_to_already_selected_mols'] > 0.5:
+                continue # we'll get the high tan score ones on the next round
+            if row['tanimoto_scores_of_full_mols_to_nearest_abx'] > 0.7:
+                continue
+            if row['tanimoto_scores_of_full_mols_to_nearest_train_set'] > 0.7:
+                continue
+            if row[compound_hit_col] < 0.1:
+                continue
+            if row[hepg2_cpd_col] > 0.1:
+                continue
+            if row[prim_cpd_col] > 0.1:
+                continue 
+            if not selected_fragment:
+                selected_fragment = True
+                selected_mols_df = pd.concat([selected_mols_df, pd.DataFrame(row).T])
+                break
+        if not selected_fragment: # we haven't selected a fragment yet, so drop standards
+            for i, row in smalldf.iterrows():
+                if row['tanimoto_scores_to_already_selected_mols'] > 0.7:
+                    continue # we'll get the high tan score ones on the next round
+                if row['tanimoto_scores_of_full_mols_to_nearest_abx'] > 0.7:
+                    continue
+                if row['tanimoto_scores_of_full_mols_to_nearest_train_set'] > 0.7:
+                    continue
+                if not selected_fragment:
+                    selected_fragment = True
+                    selected_mols_df = pd.concat([selected_mols_df, pd.DataFrame(row).T])
+                    break
+        if not selected_fragment: # we haven't selected a fragment yet, so drop standards
+            for i, row in smalldf.iterrows():
+                if row['tanimoto_scores_of_full_mols_to_nearest_abx'] > 0.7:
+                    continue
+                if row['tanimoto_scores_of_full_mols_to_nearest_train_set'] > 0.7:
+                    continue
+                if not selected_fragment:
+                    selected_fragment = True
+                    selected_mols_df = pd.concat([selected_mols_df, pd.DataFrame(row).T])
+                    break
+        if not selected_fragment:
+            continue
+    return(selected_mols_df)

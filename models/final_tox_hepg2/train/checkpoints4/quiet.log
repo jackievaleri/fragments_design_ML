@@ -1,0 +1,8 @@
+Fold 0
+Model 0 best validation auc = 0.866854 on epoch 16
+Model 0 test auc = 0.857950
+Ensemble test auc = 0.857950
+1-fold cross validation
+	Seed 4 ==> test auc = 0.857950
+Overall test auc = 0.857950 +/- 0.000000
+Elapsed time = 1 day, 19:52:21
