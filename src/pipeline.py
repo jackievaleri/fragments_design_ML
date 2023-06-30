@@ -345,20 +345,23 @@ def check_full_cpd_similarity_to_closest_abx(df, full_cpd_index_column, cpd_mols
     df['tanimoto_scores_of_full_mols_to_nearest_abx'] = tan_scores
     return(df)
 
-def check_abx(abx_path, abx_smiles_col, abx_name_col, df, fragment_index_column, frag_mols, full_cpd_index_column, cpd_mols):
-    if abx_path == '':
-        print('No antibiotics have been provided for a comparison.')
-        return(df)
-    # hardcoded file path
-    abx = pd.read_csv(abx_path)
-    print('number of abx: ', len(abx))
+def process_molset(path, smi_col, hit_col = '', just_actives = False, hit_thresh = 0):
+    if path == '':
+        print('No data have been provided for a comparison.')
+    df = pd.read_csv(path)
+    if just_actives:
+        df = df[df[hit_col] < hit_thresh]
+        df = df.reset_index(drop=True)
+    mols = [Chem.MolFromSmiles(smi) for smi in list(df[smi_col])]
+    keep_indices = [m is not None for m in mols]
+    df = df[keep_indices]
+    mols = [m for i,m in enumerate(mols) if keep_indices[i]]
+    return(df, mols)
 
-    abx_mols = [Chem.MolFromSmiles(smi) for smi in list(abx[abx_smiles_col])]
-    keep_indices = [m is not None for m in abx_mols]
-    abx = abx[keep_indices]
-    abx_mols = [m for i,m in enumerate(abx_mols) if keep_indices[i]]
+def check_abx(abx_path, abx_smiles_col, abx_name_col, df, fragment_index_column, frag_mols, full_cpd_index_column, cpd_mols):
+    abx, abx_mols = process_molset(abx_path, abx_smiles_col)
+    print('number of abx: ', len(abx))
     abx_names = abx[abx_name_col]
-    
     df = check_for_frags_in_known_abx(df, fragment_index_column, frag_mols, abx_mols)
     df = check_full_cpd_similarity_to_closest_abx(df, full_cpd_index_column, cpd_mols, abx_mols)
     return(df, abx_mols, abx_names)
@@ -375,21 +378,9 @@ def check_full_cpd_similarity_to_closest_train_set(df, full_cpd_index_column, cp
     return(df)
 
 def check_training_set(train_set_path, train_set_smiles_col, train_set_name_col, df, fragment_index_column, frag_mols, full_cpd_index_column, cpd_mols, just_actives = False, hit_col = '', hit_thresh = 0):
-    if train_set_path == '':
-        print('No training set data have been provided for a comparison.')
-        return(df)
-    ts = pd.read_csv(train_set_path)
-    if just_actives:
-        ts = ts[ts[hit_col] < hit_thresh]
-        ts = ts.reset_index(drop=True)
-    ts_mols = [Chem.MolFromSmiles(smi) for smi in list(ts[train_set_smiles_col])]
-    keep_indices = [m is not None for m in ts_mols]
-    ts = ts[keep_indices]
+    ts, ts_mols = process_molset(train_set_path, train_set_smiles_col, hit_col, just_actives, hit_thresh)
     print('number of train set molecules: ', len(ts))
-
-    ts_mols = [m for i,m in enumerate(ts_mols) if keep_indices[i]]
     ts_names = list(ts[train_set_name_col])
-    
     df = check_for_frags_in_train_set(df, 'matched_fragments', frag_mols, ts_mols)
     df = check_full_cpd_similarity_to_closest_train_set(df, 'matched_molecules', cpd_mols, ts_mols)
     return(df, ts_mols, ts_names)
@@ -516,7 +507,7 @@ def threshold_on_stat_sign_analogues_with_and_without_frags(df, absolute_diff_th
         print('number of fragments with <' + str(pval_diff_thresh) + ' (or n/a) stat significance between analogues w/ and w/o frag: ', len(df))
     if absolute_diff_thresh > 0:
         df = threshold_on_absval_column(df, 'average_difference_with_and_without_frag', absolute_diff_thresh)
-        print('number of fragments with >' + str(pval_diff_thresh) + ' (or n/a) absolute value difference between analogues w/ and w/o frag: ', len(df))
+        print('number of fragments with >' + str(absolute_diff_thresh) + ' (or n/a) absolute value difference between analogues w/ and w/o frag: ', len(df))
     return(df)
 
 ####### Visualization Helper Functions #######
