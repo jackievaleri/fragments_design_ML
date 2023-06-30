@@ -16,6 +16,8 @@ from rdkit import Chem
 from rdkit.Chem import AllChem
 from rdkit import DataStructs
 from rdkit.Chem.Draw import rdMolDraw2D
+from rdkit.Chem import rdDepictor
+from copy import deepcopy
 
 #### Part 1: t-SNE Helper Functions
 
@@ -133,3 +135,75 @@ def draw_mols_with_highlight(mols, frag, legends, file_path, cut_down_size = Fal
                                   highlightBonds=hit_bonds, highlightAtomColors=hit_atom_cols, highlightBondColors=hit_bond_cols)
     d2d.FinishDrawing()
     open(file_path,'wb+').write(d2d.GetDrawingText())
+
+#### Interpretation Helpers ####
+
+def proc_interpret_df(df):
+    orig_smis = []
+    orig_scores = []
+    rationale_smis = []
+    rationale_scores = []
+    
+    for i, line in df.iterrows():
+        line = list(line)[0]
+        if ('Loading pretrained' in line) or ('Moving model' in line) or ('rationale_score' in line) or ('Elapsed time' in line):
+            continue
+        line = line.split('\'')
+        orig_smi = line[1]
+        rest = line[2].split(',')
+        orig_sco = rest[1]
+        rationale_smi = rest[2]
+        rationale_sco = rest[3]
+        
+        orig_smis.append(orig_smi)
+        orig_scores.append(orig_sco)
+        rationale_smis.append(rationale_smi)
+        rationale_scores.append(rationale_sco)
+        
+    newdf = pd.DataFrame()
+    newdf['compound_SMILES'] = orig_smis
+    newdf['orig_score'] = orig_scores
+    newdf['rationale'] = rationale_smis
+    newdf['rationale_score'] = rationale_scores
+    
+    return(newdf)
+
+# code adapted from https://stackoverflow.com/questions/69735586/how-to-highlight-the-substructure-of-a-molecule-with-thick-red-lines-in-rdkit-as
+def interpretation_increase_resolution(smi_big, smi_substr, size=(400, 200), kekulize=True, legend = '', file_path = ''):
+    mol = Chem.MolFromSmiles(smi_big)
+    substructure = Chem.MolFromSmiles(smi_substr)
+    mol = deepcopy(mol)
+    substructure = deepcopy(substructure)
+    rdDepictor.Compute2DCoords(mol)
+    if kekulize:
+        Chem.Kekulize(mol, clearAromaticFlags=True) # Localize the benzene ring bonds
+        Chem.Kekulize(substructure, clearAromaticFlags=True)
+        
+        mol = Chem.RemoveHs(mol, sanitize=True)
+        substructure = Chem.RemoveHs(substructure, sanitize=True)
+        
+    drawer = rdMolDraw2D.MolDraw2DSVG(size[0], size[1])
+
+    # manually correct those that aren't being properly highlighted
+    corrections_dict = {'C[C@]1(Cn2ccnn2)C(N2C(CC2=O)S1(=O)=O)C(O)=O.O=C1CC2N1C([CH3:1])[C:1][S:1]2': (1,8,9,10,11,12,13,14,17),                       
+                       }
+    # highlightAtoms expects only one tuple, not tuple of tuples. So it needs to be merged into a single tuple
+    matches = sum(mol.GetSubstructMatches(substructure), ())
+    mod_smi = smi_big + '.' + smi_substr
+    if len(matches) == 0:
+        if mod_smi in corrections_dict:
+            matches = corrections_dict[mod_smi]
+        else:
+            print(smi_big)
+            print(smi_substr)
+    svg = drawer.GetDrawingText()    
+    drawer.DrawMolecule(mol, highlightAtoms=matches, legend = legend)
+    drawer.FinishDrawing()
+    svg = drawer.GetDrawingText()
+   # if smi_big != 'Cc1cc2c(c(c1C(=O)O)O)C(=O)c1c(cc(cc1C2=O)O)O':
+   #     return(svg.replace('svg:',''))
+    
+    with open(file_path + '.svg', 'w') as f:
+        f.write(svg)
+        
+    return svg.replace('svg:','')
