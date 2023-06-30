@@ -18,11 +18,11 @@ fragment-based algorithm for the design of antibacterial compounds
 * 10 - round5 (need to run to verify)
 * 12 - NG round1 (need to run to verify)
 * 16 - crem and vae downselect
+* 17 - fragments compared to rationales
+
 
 # TODO
-
-* 13 - hit rate summary figure with fragments inset
-* 17 - fragments compared to rationales
+* 13 - hit rate summary figure with fragments inset (and then change results path in #17 with all successful mols)
 
 # ON DECK
 
