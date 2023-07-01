@@ -8,6 +8,7 @@ fragment-based algorithm for the design of antibacterial compounds
 * 04 - scatterplot with insets
 * 05 - in silico control
 * 11 - round6
+* 12 - NG round1
 * 15 - crem code polished
 * 17 - fragments compared to rationales
 
@@ -17,7 +18,6 @@ fragment-based algorithm for the design of antibacterial compounds
 * 08 - round3 (need to run to verify)
 * 09 - round4 (need to run to verify)
 * 10 - round5 (need to run to verify)
-* 12 - NG round1 (need to run to verify)
 * 16 - crem and vae downselect
 
 # TODO
