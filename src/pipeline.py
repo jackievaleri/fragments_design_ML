@@ -345,12 +345,15 @@ def check_full_cpd_similarity_to_closest_abx(df, full_cpd_index_column, cpd_mols
     df['tanimoto_scores_of_full_mols_to_nearest_abx'] = tan_scores
     return(df)
 
-def process_molset(path, smi_col, hit_col = '', just_actives = False, hit_thresh = 0):
+def process_molset(path, smi_col, hit_col = '', just_actives = False, hit_thresh = 0, greater_than = False):
     if path == '':
         print('No data have been provided for a comparison.')
     df = pd.read_csv(path)
     if just_actives:
-        df = df[df[hit_col] < hit_thresh]
+        if greater_than:
+            df = df[df[hit_col] > hit_thresh]
+        else:
+            df = df[df[hit_col] < hit_thresh]
         df = df.reset_index(drop=True)
     mols = [Chem.MolFromSmiles(smi) for smi in list(df[smi_col])]
     keep_indices = [m is not None for m in mols]
@@ -377,8 +380,8 @@ def check_full_cpd_similarity_to_closest_train_set(df, full_cpd_index_column, cp
     df['tanimoto_scores_of_full_mols_to_nearest_train_set'] = tan_scores
     return(df)
 
-def check_training_set(train_set_path, train_set_smiles_col, train_set_name_col, df, fragment_index_column, frag_mols, full_cpd_index_column, cpd_mols, just_actives = False, hit_col = '', hit_thresh = 0):
-    ts, ts_mols = process_molset(train_set_path, train_set_smiles_col, hit_col, just_actives, hit_thresh)
+def check_training_set(train_set_path, train_set_smiles_col, train_set_name_col, df, fragment_index_column, frag_mols, full_cpd_index_column, cpd_mols, just_actives = False, hit_col = '', hit_thresh = 0, greater_than = False):
+    ts, ts_mols = process_molset(train_set_path, train_set_smiles_col, hit_col, just_actives, hit_thresh, greater_than)
     print('number of train set molecules: ', len(ts))
     ts_names = list(ts[train_set_name_col])
     df = check_for_frags_in_train_set(df, 'matched_fragments', frag_mols, ts_mols)
@@ -808,7 +811,7 @@ def deduplicate_on_similar_pairs(selected_mols_df, thresh = 0.9, compound_smi_co
         
 #### Actual algorithm ####
 
-def run_pipeline(fragment_path, compound_path, result_path, fragment_smi_col = 'smiles', compound_smi_col = 'smiles', fragment_hit_col = 'hit', compound_hit_col = 'hit', fragment_score = 0.2, compound_score = 0.2, fragment_require_more_than_coh = True, fragment_remove_pains_brenk = 'both', compound_remove_pains_brenk = 'both', fragment_druglikeness_filter = [], compound_druglikeness_filter = [], fragment_remove_patterns = [], frags_cannot_disrupt_rings = True, fragment_length_threshold = 0, toxicity_threshold_if_present = 0, toxicity_threshold_require_presence = False, abx_path = '', abx_smiles_col = 'smiles', abx_name_col = 'Name', train_set_path = '', train_set_smiles_col = 'smiles', train_set_name_col = 'Name', analogues_pval_diff_thresh = 0, analogues_absolute_diff_thresh = 0, cpd_name_col = 'Name', display_inline_candidates=False, purch_path='', purch_name_col='Name', purch_name_needs_split=False, tested_before_path='', tested_before_name_col='Name', tested_before_name_needs_split=False, cpd_sim_to_abx=0, cpd_sim_to_train_set=0):
+def run_pipeline(fragment_path, compound_path, result_path, fragment_smi_col = 'smiles', compound_smi_col = 'smiles', fragment_hit_col = 'hit', compound_hit_col = 'hit', fragment_score = 0.2, compound_score = 0.2, fragment_require_more_than_coh = True, fragment_remove_pains_brenk = 'both', compound_remove_pains_brenk = 'both', fragment_druglikeness_filter = [], compound_druglikeness_filter = [], fragment_remove_patterns = [], frags_cannot_disrupt_rings = True, fragment_length_threshold = 0, toxicity_threshold_if_present = 0, toxicity_threshold_require_presence = False, abx_path = '', abx_smiles_col = 'smiles', abx_name_col = 'Name', train_set_path = '', train_set_smiles_col = 'smiles', train_set_name_col = 'Name',  train_set_just_actives = False, train_set_hit_col = '', train_set_thresh = 0, train_set_greater_than = False, analogues_pval_diff_thresh = 0, analogues_absolute_diff_thresh = 0, cpd_name_col = 'Name', display_inline_candidates=False, purch_path='', purch_name_col='Name', purch_name_needs_split=False, tested_before_path='', tested_before_name_col='Name', tested_before_name_needs_split=False, cpd_sim_to_abx=0, cpd_sim_to_train_set=0):
 
     ##### part 1: process frags and compounds #####
     print('\nProcessing fragments...')
@@ -832,7 +835,7 @@ def run_pipeline(fragment_path, compound_path, result_path, fragment_smi_col = '
         rank_df, abx_mols, abx_names = check_abx(abx_path, abx_smiles_col, abx_name_col, rank_df, 'matched_fragments', mols, 'matched_molecules', cpd_mols)
     # check for frags within train set or molecules close to train set - again does not remove cpds
     if train_set_path !='':
-        rank_df, ts_mols, ts_names = check_training_set(train_set_path, train_set_smiles_col, train_set_name_col, rank_df, 'matched_fragments', mols, 'matched_molecules', cpd_mols)
+        rank_df, ts_mols, ts_names = check_training_set(train_set_path, train_set_smiles_col, train_set_name_col, rank_df, 'matched_fragments', mols, 'matched_molecules', cpd_mols, just_actives=train_set_just_actives, hit_col = train_set_hit_col, hit_thresh = train_set_thresh, greater_than = train_set_greater_than)
     # check for fragments at least bigger than fragment_length_threshold
     rank_df = rank_df[rank_df['length_of_fragment'] > fragment_length_threshold]
 
@@ -969,7 +972,7 @@ def run_frag_only_pipeline(fragment_path, result_path, fragment_smi_col='smiles'
 
     return(rank_df)
 
-def process_fragments_after_receiving_available_compounds(final_frags_path, new_cpds_path, result_path, fragment_hit_col = 'hit', compound_score=0.1, compound_smi_col='SMILES', compound_hit_col='hit', compound_remove_pains_brenk='both', compound_druglikeness_filter=[], hepg2_frag_col = '', hepg2_frag_tox_cutoff = 0.2, prim_frag_col = '', prim_frag_tox_cutoff = 0.2, hepg2_cpd_col = '', prim_cpd_col = '', abx_path = '', abx_smiles_col = 'smiles', abx_name_col = 'Name', train_set_path = '', train_set_smiles_col = 'smiles', train_set_name_col = 'Name', train_set_just_actives = False, train_set_hit_col = '', train_set_thresh = 0):
+def process_fragments_after_receiving_available_compounds(final_frags_path, new_cpds_path, result_path, fragment_hit_col = 'hit', compound_score=0.1, compound_smi_col='SMILES', compound_hit_col='hit', compound_remove_pains_brenk='both', compound_druglikeness_filter=[], hepg2_frag_col = '', hepg2_frag_tox_cutoff = 0.2, prim_frag_col = '', prim_frag_tox_cutoff = 0.2, hepg2_cpd_col = '', prim_cpd_col = '', abx_path = '', abx_smiles_col = 'smiles', abx_name_col = 'Name', train_set_path = '', train_set_smiles_col = 'smiles', train_set_name_col = 'Name', train_set_just_actives = False, train_set_hit_col = '', train_set_thresh = 0, train_set_greater_than = False):
     ##### part 1: read back in fragments - these have already been processed
     df = pd.read_csv(final_frags_path)
     
@@ -1031,7 +1034,7 @@ def process_fragments_after_receiving_available_compounds(final_frags_path, new_
     # now do tanimoto filtering on antibiotics and training set
     rank_df, abx_mols, abx_names = check_abx(abx_path, abx_smiles_col, abx_name_col, rank_df, 'matched_fragments', mols, 'matched_molecules', cpd_mols)
     # check for frags within train set or molecules close to train set - again does not remove cpds
-    rank_df, ts_mols, ts_names = check_training_set(train_set_path, train_set_smiles_col, train_set_name_col, rank_df, 'matched_fragments', mols, 'matched_molecules', cpd_mols, just_actives=train_set_just_actives, hit_col = train_set_hit_col, hit_thresh = train_set_thresh)
+    rank_df, ts_mols, ts_names = check_training_set(train_set_path, train_set_smiles_col, train_set_name_col, rank_df, 'matched_fragments', mols, 'matched_molecules', cpd_mols, just_actives=train_set_just_actives, hit_col = train_set_hit_col, hit_thresh = train_set_thresh, greater_than = train_set_greater_than)
     
     current_all_matching_mols = [Chem.MolFromSmiles(smi) for smi in list(all_matching_mols_df[compound_smi_col])]
     all_matching_mols_df['tanimoto_scores_of_full_mols_to_nearest_abx'] = for_mol_list_get_lowest_tanimoto_to_closest_mol(current_all_matching_mols, abx_mols)
