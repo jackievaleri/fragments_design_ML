@@ -12,8 +12,10 @@ fragment-based algorithm for the design of antibacterial compounds
 * 15 - crem code polished
 * 17 - fragments compared to rationales
 
-# IN PROGRESS
+# CURRENTLY RUNNING
 * 06 - round1 pilot screen clean (need to run to verify)
+
+# IN PROGRESS
 * 07 - round2 (need to run to verify)
 * 08 - round3 (need to run to verify)
 * 09 - round4 (need to run to verify)
@@ -22,7 +24,3 @@ fragment-based algorithm for the design of antibacterial compounds
 
 # TODO
 * 13 - hit rate summary figure with fragments inset (and then change results path in #17 with all successful mols)
-
-# ON DECK
-
-* SAR?
