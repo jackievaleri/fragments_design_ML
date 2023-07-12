@@ -572,16 +572,17 @@ def plot_final_fragments_with_all_info(df, output_folder, frags, cpd_mols, cpd_n
             except:
                 continue
             print('length of fragment: ', row['length_of_fragment'])
-        abx_index_list = row['matched_antibiotics']
-        if len(abx_index_list) > 0 and display_inline_candidates:
+        
+        if abx_mols is not None and display_inline_candidates:
+            abx_index_list = row['matched_antibiotics']
             print('matching abx')
             img=Draw.MolsToGridImage([m for i,m in enumerate(abx_mols) if i in abx_index_list], molsPerRow=10,maxMols=100, legends = [str(abx_names[i]) for i in abx_index_list])
             display(img)
         elif display_inline_candidates:
             print('no matching abx found')
             
-        ts_index_list = row['matched train set molecules']
-        if len(ts_index_list) > 0 and display_inline_candidates:
+        if ts_mols is not None and display_inline_candidates:
+            ts_index_list = row['matched train set molecules']
             print('matching train set compounds')
             img=Draw.MolsToGridImage([m for i,m in enumerate(ts_mols) if i in ts_index_list], molsPerRow=10,maxMols=100, legends = [str(ts_names[i]) for i in ts_index_list])
             display(img)
@@ -593,8 +594,14 @@ def plot_final_fragments_with_all_info(df, output_folder, frags, cpd_mols, cpd_n
             curr_match_names = [cpd_names[i] for i in full_mol_index_list]
             curr_match_names = [x if type(x) is str else 'nan' for x in curr_match_names]
             curr_match_scores = [float(x) for x in list(row['full_molecule_scores'])]
-            curr_tan_abxs = [float(x) for x in list(row['tanimoto_scores_of_full_mols_to_nearest_abx'])]
-            curr_tan_tss = [float(x) for x in list(row['tanimoto_scores_of_full_mols_to_nearest_train_set'])]
+            if abx_mols is not None:
+                curr_tan_abxs = [float(x) for x in list(row['tanimoto_scores_of_full_mols_to_nearest_abx'])]
+            else:
+                curr_tan_abxs = [-1] * len(curr_match_scores)
+            if ts_mols is not None:
+                curr_tan_tss = [float(x) for x in list(row['tanimoto_scores_of_full_mols_to_nearest_train_set'])]
+            else:
+                curr_tan_tss = [-1] * len(curr_match_scores)
             curr_match_scores, curr_tan_abxs, curr_tan_tss, curr_match_mol_index_list, curr_match_names = zip(*sorted(zip(curr_match_scores, curr_tan_abxs, curr_tan_tss, full_mol_index_list, curr_match_names), reverse = True))
             curr_match_mols = [m for i,m in enumerate(cpd_mols) if i in curr_match_mol_index_list]
             legends = [n + ', ' + str(np.round(sc, 3)) + '\n tan score to closest abx: ' + str(np.round(ta, 3)) + '\n tan score to closest TS: ' + str(np.round(tt, 3)) for n,sc,ta,tt in zip(curr_match_names, curr_match_scores, curr_tan_abxs, curr_tan_tss)]
@@ -833,9 +840,15 @@ def run_pipeline(fragment_path, compound_path, result_path, fragment_smi_col = '
     # check for frags within abx or cpds close to known abx - does not remove any cpds
     if abx_path !='':
         rank_df, abx_mols, abx_names = check_abx(abx_path, abx_smiles_col, abx_name_col, rank_df, 'matched_fragments', mols, 'matched_molecules', cpd_mols)
+    else:
+        abx_mols = None
+        abx_names = None
     # check for frags within train set or molecules close to train set - again does not remove cpds
     if train_set_path !='':
         rank_df, ts_mols, ts_names = check_training_set(train_set_path, train_set_smiles_col, train_set_name_col, rank_df, 'matched_fragments', mols, 'matched_molecules', cpd_mols, just_actives=train_set_just_actives, hit_col = train_set_hit_col, hit_thresh = train_set_thresh, greater_than = train_set_greater_than)
+    else:
+        ts_mols = None
+        ts_names = None
     # check for fragments at least bigger than fragment_length_threshold
     rank_df = rank_df[rank_df['length_of_fragment'] > fragment_length_threshold]
 
@@ -899,8 +912,10 @@ def run_pipeline(fragment_path, compound_path, result_path, fragment_smi_col = '
 
     # now do tanimoto filtering on antibiotics and training set
     current_all_matching_mols = [Chem.MolFromSmiles(smi) for smi in list(all_matching_mols_df[compound_smi_col])]
-    all_matching_mols_df['tan to nearest abx'] = for_mol_list_get_lowest_tanimoto_to_closest_mol(current_all_matching_mols, abx_mols)
-    all_matching_mols_df['tan to nearest ts'] = for_mol_list_get_lowest_tanimoto_to_closest_mol(current_all_matching_mols, ts_mols)
+    if abx_mols is not None:
+        all_matching_mols_df['tan to nearest abx'] = for_mol_list_get_lowest_tanimoto_to_closest_mol(current_all_matching_mols, abx_mols)
+    if ts_mols is not None:
+        all_matching_mols_df['tan to nearest ts'] = for_mol_list_get_lowest_tanimoto_to_closest_mol(current_all_matching_mols, ts_mols)
 
     if cpd_sim_to_abx > 0:
         all_matching_mols_df = all_matching_mols_df[all_matching_mols_df['tan to nearest abx'] < cpd_sim_to_abx]
