@@ -8,21 +8,19 @@ fragment-based algorithm for the design of antibacterial compounds
 * 04 - scatterplot with insets
 * 05 - in silico control
 * 11 - round6
+* 12 - NG round1
 * 15 - crem code polished
 * 17 - fragments compared to rationales
 
-# IN PROGRESS
+# CURRENTLY RUNNING
 * 06 - round1 pilot screen clean (need to run to verify)
+
+# IN PROGRESS
 * 07 - round2 (need to run to verify)
 * 08 - round3 (need to run to verify)
 * 09 - round4 (need to run to verify)
 * 10 - round5 (need to run to verify)
-* 12 - NG round1 (need to run to verify)
 * 16 - crem and vae downselect
 
 # TODO
 * 13 - hit rate summary figure with fragments inset (and then change results path in #17 with all successful mols)
-
-# ON DECK
-
-* SAR?
