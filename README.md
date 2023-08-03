@@ -10,7 +10,7 @@ fragment-based algorithm for the design of antibacterial compounds
 * 06 - round1 pilot screen clean
 * 11 - round6
 * 12 - NG round1
-* 14 - hit rate summary figure with fragments inset (and change the sa rd2-6 when done with appropriate paths)
+* 14 - hit rate summary figure with fragments inset (and change the sa rd2-6 in 14A when done with appropriate paths)
 * 15 - crem code polished
 * 16 - crem and vae downselect
 * 17 - fragments compared to rationales (and then change results path in #17 with all successful mols)
