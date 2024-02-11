@@ -66,22 +66,10 @@ def make_tsne_figure(tsne_df, fig_path, colors = None):
 #### Part 2: Model evaluation
 
 def aupr(y_true, y_pred):
-    # Compute precision-recall and plot curve
+    # Compute precision-recall
     precision, recall, thresholds = precision_recall_curve(y_true, y_pred)
     pr = float(auc(recall,precision))
     print('precision recall: ' + str(pr))
-
-    fig, ax = plt.subplots(figsize = (2,2), dpi = 300)
-    plt.clf()
-    plt.plot(recall, precision)
-    plt.xlabel('Recall')
-    plt.ylabel('Precision')
-    plt.ylim([0.0, 1.05])
-    plt.xlim([0.0, 1.05])
-    ax.spines['right'].set_visible(False)
-    ax.spines['top'].set_visible(False)
-    plt.tight_layout()
-    plt.show()  
 
 def evaluate_model(validation, cutoff_for_positive, actual_col = 'class', predicted_col = 'ACTIVITY'):
     actual = list(validation[actual_col])
