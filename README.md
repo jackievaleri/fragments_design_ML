@@ -1,25 +1,7 @@
-# Fragment-based antibacterial drug design
-fragment-based algorithm for the design of antibacterial compounds
+# A generative deep learning approach to de novo antibiotic design
 
-# DONE
-* 01 - fragments in known antibiotics (nitrofuran, fluoroquinolone, carbapenem)
-* 02 - GDB fragments t-SNE (GDB1 thru 17; GDB11+17+known antibiotics)
-* 03 - NG + SA train set venn diagram and NG + SA models on external val sets
-* 04 - scatterplot with insets
-* 05 - in silico control
-* 06 - round1 pilot screen clean
-* 11 - round6
-* 12 - NG round1
-* 13 - NG round2
-* 14 - hit rate summary figure with fragments inset (and change the sa rd2-6 in 14A when done with appropriate paths)
-* 15 - crem code polished
-* 16 - crem and vae downselect
-* 17 - fragments compared to rationales (and then change results path in #17 with all successful mols)
+Code to reproduce results for work in progress, Krishnan, Anahtar, Valeri, et al., 2024.
 
-# CURRENTLY RUNNING
-* 07 - round2 (need to run to verify)
-  
-# IN PROGRESS
-* 08 - round3 (need to run to verify)
-* 09 - round4 (need to run to verify)
-* 10 - round5 (need to run to verify)
+## Summary
+
+There is an urgent need to develop structurally novel antibiotics to address the ongoing antimicrobial resistance crisis. Deep learning approaches can accurately identify antibacterial compounds from existing chemical libraries, but structural novelty remains limited by the number of enumerated compounds. Here, we sought to design structurally unprecedented antibiotics using generative artificial intelligence. We used pre-trained deep learning models to comprehensively screen >108 chemical fragments in silico, predicting core scaffolds with selective antibacterial activity against *Staphylococcus aureus* or *Neisseria gonorrhoeae*. We then developed generative models based on genetic algorithms and variational encoders to expand these fragments into larger molecules with desired properties. We successfully synthesized six de novo-designed compounds, representative of two structural classes, and empirically validated five compounds to have selective antibacterial activity against *S. aureus* or *N. gonorrhoeae*. Compounds from each structural class were bactericidal against multidrug-resistant isolates and exhibited distinct membrane-targeting mechanisms of action. We further tested these compounds in mouse models of *MRSA* skin infection and *N. gonorrhoeae* vaginal infection and found that they effectively reduced bacterial titers in vivo. Finally, we synthesized structural analogs for both classes and validated several analogs to be antibacterial, supporting the potential of our designed compounds for further development. Our approach enables the generative deep learning-guided de novo design of antibiotics, providing a platform for mapping uncharted regions of chemical space.
