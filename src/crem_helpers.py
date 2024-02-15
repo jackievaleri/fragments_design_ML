@@ -13,7 +13,7 @@ from rdkit.Chem import DataStructs
 from rdkit.Chem import RDConfig
 
 sys.path.append(os.path.join(RDConfig.RDContribDir, "SA_Score"))
-import sascorer
+import sascorer  # noqa
 
 
 def calculateScoreThruToxModel(
@@ -23,7 +23,7 @@ def calculateScoreThruToxModel(
     Function to calculate scores through a toxicity model.
 
     This function generates a clean CSV file,
-    runs a command line through Jupyter using subprocess, 
+    runs a command line through Jupyter using subprocess,
     and returns a list of SMILES and corresponding toxicity scores.
 
     :param patterns: List of patterns
@@ -53,10 +53,15 @@ def calculateScoreThruToxModel(
         + " --preds_path "
         + "../generativeML/out/"
         + clean_name
-        + " --features_generator rdkit_2d_normalized --no_features_scaling --smiles_columns SMILES"
+        + " --features_generator rdkit_2d_normalized "
+        + "--no_features_scaling --smiles_columns SMILES"
     )
     full_command = activate_command + run_command
-    subprocess.run(full_command, cwd="../../chemprop/", shell=True, capture_output=True)
+    subprocess.run(
+        full_command,
+        cwd="../../chemprop/",
+        shell=True,
+        capture_output=True)
     preds = pd.read_csv(clean_name)
 
     new_smis = list(preds["SMILES"])
@@ -67,13 +72,17 @@ def calculateScoreThruToxModel(
         return []
 
 
-def process_molset(path, smi_col, hit_col="", just_actives=False, hit_thresh=0):
+def process_molset(path,
+                   smi_col,
+                   hit_col="",
+                   just_actives=False,
+                   hit_thresh=0):
     """
     Function to process a set of compounds based on their hit scores.
 
-    This function takes a file path, SMILES column name, optional hit column, 
-    a flag to select only actives, and an optional hit threshold as input. 
-    It reads a CSV file, filters the data based on hit threshold if necessary, 
+    This function takes a file path, SMILES column name, optional hit column,
+    a flag to select only actives, and an optional hit threshold as input.
+    It reads a CSV file, filters the data based on hit threshold if necessary,
     converts SMILES to RDKit Mol objects, and returns a DataFrame and mols.
 
     :param path: File path
@@ -110,7 +119,13 @@ def collate_crem_molecules_from_multiple_rounds(
     :param hit_col: Name of the hit column (default: 'ACTIVITY')
     :return: DataFrame containing collated molecules
     """
-    columns = ["Score", "Grow_or_Mut", "Algorithm_Params", "Round", smi_col, hit_col]
+    columns = [
+        "Score",
+        "Grow_or_Mut",
+        "Algorithm_Params",
+        "Round",
+        smi_col,
+        hit_col]
     allmolsdf = pd.DataFrame(columns=columns)
     currmolsdf = pd.DataFrame(columns=columns)
 
@@ -123,7 +138,6 @@ def collate_crem_molecules_from_multiple_rounds(
                 method = "modified_score"
             else:
                 method = "chemprop_score"
-
             if "grow" in filename:
                 mod = "grow"
             elif "mutate" in filename:
@@ -132,10 +146,11 @@ def collate_crem_molecules_from_multiple_rounds(
             param_names = filename.split(mod + "/")[1].split("/")[0]
             rd = filename.split("all_mols_round_")[1].split("_scores.csv")[0]
             df = pd.read_csv(filename)
+
             try:
                 _ = df[
                     df[hit_col] > 0.1
-                ]  # some did not make it to have their activities calculated - exclude
+                ]  # some did not make it to have their activities calculated
             except Exception as e:
                 print(e)
                 continue
@@ -169,6 +184,7 @@ def filter_crem_dataframe(
     allmolsdf,
     smi_col,
     hit_col,
+    out_dir,
     hit_thresh=0.5,
     sascore_thresh=3,
     tan_to_abx=0.5,
@@ -190,11 +206,14 @@ def filter_crem_dataframe(
     """
     Filter CREM DataFrame.
 
-    Involves deduplicates, gating on several column values, and similarity to predefined compound sets.
+    Involves deduplicating,
+    gating on several column values,
+    and similarity to predefined compound sets.
 
     :param allmolsdf: DataFrame containing all molecules
     :param smi_col: Name of the SMILES column
     :param hit_col: Name of the hit column
+    :param out_dir: Name of the output directory
     :param hit_thresh: Hit threshold
     :param sascore_thresh: SAScore threshold
     :param tan_to_abx: Tanimoto similarity threshold to antibiotics
@@ -206,10 +225,10 @@ def filter_crem_dataframe(
     :param train_set_path: Path to train set data
     :param train_set_smiles_col: Name of the SMILES column in train set data
     :param train_set_hit_col: Name of the hit column in train set data
-    :param train_set_just_actives: Flag for considering only actives in train set data
+    :param train_set_just_actives: Flag for considering only actives in TS
     :param train_set_hit_thresh: Hit threshold in train set data
     :param patterns: List of patterns to exclude
-    :param orig_mol_tan_thresh: Tanimoto similarity threshold to original molecule
+    :param orig_mol_tan_thresh: Tanimoto similarity threshold to original cpd
     :param orig_mol: Original molecule
     :param display: Flag to display plots
     :return: Filtered DataFrame
@@ -231,12 +250,14 @@ def filter_crem_dataframe(
     df["sa_score"] = [sascorer.calculateScore(mol) for mol in mols]
     if display:
         hist_plot(df, "sa_score", "Synthetic Complexity", "Round")
-    keep_indices = [sascore < sascore_thresh for sascore in list(df["sa_score"])]
+    keep_indices = [
+        sascore < sascore_thresh for sascore in list(
+            df["sa_score"])]
     df = df[keep_indices].reset_index(drop=True)
     print("SAScore < " + str(sascore_thresh) + ": ", len(df))
 
     # gate on tanimoto similarity to abx
-    abx, abx_mols = process_molset(abx_path, abx_smiles_col)
+    _, abx_mols = process_molset(abx_path, abx_smiles_col)
     abx_fps = [Chem.RDKFingerprint(mol) for mol in abx_mols]
     mols = [Chem.MolFromSmiles(smi) for smi in list(df[smi_col])]
     query_fps = [Chem.RDKFingerprint(mol) for mol in mols]
@@ -245,37 +266,47 @@ def filter_crem_dataframe(
         for query_fp in query_fps
     ]
     if display:
-        hist_plot(df, "max_tan_sim_to_abx", "Max Tan Sim to Known Antibiotics", "Round")
-    keep_indices = [max_tan < tan_to_abx for max_tan in list(df["max_tan_sim_to_abx"])]
+        hist_plot(
+            df,
+            "max_tan_sim_to_abx",
+            "Max Tan Sim to Known Antibiotics",
+            "Round")
+    keep_indices = [
+        max_tan < tan_to_abx for max_tan in list(
+            df["max_tan_sim_to_abx"])]
     df = df[keep_indices].reset_index(drop=True)
     mols = [m for i, m in enumerate(mols) if keep_indices[i]]
     print("Tan Sim to Abx < " + str(tan_to_abx) + ": ", len(df))
 
     # gate on toxicity scores
     _, hepg2_toxs = calculateScoreThruToxModel(
-        list(df[smi_col]), OUT_DIR, "_temp_predictions.csv", "hepg2"
+        list(df[smi_col]), out_dir, "_temp_predictions.csv", "hepg2"
     )
     df["hepg2_pred_tox"] = hepg2_toxs
     if display:
         hist_plot(df, "hepg2_pred_tox", "HepG2 Tox Model Score", "Round")
-    keep_indices = [tox < hepg2_tox_thresh for tox in list(df["hepg2_pred_tox"])]
+    keep_indices = [
+        tox < hepg2_tox_thresh for tox in list(
+            df["hepg2_pred_tox"])]
     df = df[keep_indices].reset_index(drop=True)
     mols = [m for i, m in enumerate(mols) if keep_indices[i]]
     print("HepG2 pred tox < " + str(hepg2_tox_thresh) + ": ", len(df))
 
     _, prim_toxs = calculateScoreThruToxModel(
-        list(df[smi_col]), OUT_DIR, "_temp_predictions.csv", "primary"
+        list(df[smi_col]), out_dir, "_temp_predictions.csv", "primary"
     )
     df["primary_pred_tox"] = prim_toxs
     if display:
         hist_plot(df, "primary_pred_tox", "Primary Tox Model Score", "Round")
-    keep_indices = [tox < prim_tox_thresh for tox in list(df["primary_pred_tox"])]
+    keep_indices = [
+        tox < prim_tox_thresh for tox in list(
+            df["primary_pred_tox"])]
     df = df[keep_indices].reset_index(drop=True)
     mols = [m for i, m in enumerate(mols) if keep_indices[i]]
     print("Primary pred tox < " + str(prim_tox_thresh) + ": ", len(df))
 
     # gate on tanimoto similarity to train set
-    ts, ts_mols = process_molset(
+    _, ts_mols = process_molset(
         train_set_path,
         train_set_smiles_col,
         train_set_hit_col,
@@ -313,10 +344,14 @@ def filter_crem_dataframe(
     orig_mol_fp = Chem.RDKFingerprint(orig_mol)
     query_fps = [Chem.RDKFingerprint(mol) for mol in mols]
     df["tan_sim_to_orig_mol"] = [
-        DataStructs.TanimotoSimilarity(query_fp, orig_mol_fp) for query_fp in query_fps
+        DataStructs.TanimotoSimilarity(q_fp, orig_mol_fp) for q_fp in query_fps
     ]
     if display:
-        hist_plot(df, "tan_sim_to_orig_mol", "Tanimoto Similarity to Orig Mol", "Round")
+        hist_plot(
+            df,
+            "tan_sim_to_orig_mol",
+            "Tanimoto Similarity to Orig Mol",
+            "Round")
     keep_indices = [
         tan < orig_mol_tan_thresh for tan in list(df["tan_sim_to_orig_mol"])
     ]
@@ -331,7 +366,7 @@ def analyze_crem_df(df, num_rounds=5):
     """
     Analyzes the composition of the DataFrame.
 
-    This function takes a DataFrame containing molecular data as input 
+    This function takes a DataFrame containing molecular data as input
     and prints the counts of molecules from each method and round.
 
     :param df: DataFrame containing molecular data

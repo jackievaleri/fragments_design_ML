@@ -1,4 +1,7 @@
 #### Imports ####
+import cairosvg
+import sascorer
+from rdkit.Chem import RDConfig
 from crem.crem import mutate_mol, grow_mol
 from multiprocessing import Pool
 import pandas as pd
@@ -18,13 +21,10 @@ from IPython.display import SVG, Image
 from rdkit import RDLogger
 
 RDLogger.DisableLog("rdApp.*")  # shut off warnings
-from rdkit.Chem import RDConfig
 
 sys.path.append(
     os.path.join(RDConfig.RDContribDir, "SA_Score")
 )  # now you can import sascore!
-import sascorer
-import cairosvg
 
 #### Global Variables ####
 
@@ -44,6 +44,8 @@ abx_fps = [Chem.RDKFingerprint(Chem.MolFromSmiles(smi)) for smi in abx_smiles]
 #### Helper Functions ####
 
 # modified for NG model where have to save features ahead of time
+
+
 def calculateScoreThruChemprop(
     patterns, results_folder_name, results_file_name, model_path, hit_column
 ):
@@ -52,7 +54,8 @@ def calculateScoreThruChemprop(
     new_df = pd.DataFrame(patterns, columns=["SMILES"])
     new_df.to_csv(clean_name, index=False)
 
-    # use subprocess to run command line thru jupyter notebook - could easily just run command line but this is automated
+    # use subprocess to run command line thru jupyter notebook - could easily
+    # just run command line but this is automated
     activate_command = "source ~/opt/anaconda3/bin/activate; conda activate chemprop; "
     genML_folder = "../"  # from chemprop folder
 
@@ -127,7 +130,8 @@ def calculateScoreThruToxModel(
     new_df = pd.DataFrame(patterns, columns=["SMILES"])
     new_df.to_csv(clean_name, index=False)
 
-    # use subprocess to run command line thru jupyter notebook - could easily just run command line but this is automated
+    # use subprocess to run command line thru jupyter notebook - could easily
+    # just run command line but this is automated
     activate_command = "source ~/opt/anaconda3/bin/activate; conda activate chemprop; "
     genML_folder = "../"  # from chemprop folder
 
@@ -221,12 +225,15 @@ def select_top_based_on_criteria(
             tansim = row["max_tan_sim_to_abx"]
             hepg2 = row["hepg2_tox"]
             prim = row["prim_tox"]
-            adj_score = (2.0 * chempropsco) - ((sascore / 10.0) + tansim + hepg2 + prim)
+            adj_score = (2.0 * chempropsco) - \
+                ((sascore / 10.0) + tansim + hepg2 + prim)
             adj_scores.append(adj_score)
         sorteddf["adjusted_score"] = adj_scores
     else:  # regular score
         sorteddf["adjusted_score"] = list(sorteddf["scores"])
-    sorteddf = sorteddf.sort_values("adjusted_score", ascending=False).reset_index()
+    sorteddf = sorteddf.sort_values(
+        "adjusted_score",
+        ascending=False).reset_index()
 
     if len(sorteddf) < num_top_to_get + num_random_to_get:
         good_smis = list(sorteddf["SMILES"])
@@ -247,7 +254,8 @@ def select_top_based_on_criteria(
         new_sco = sorteddf.iloc[x, :]["adjusted_score"]
         good_scos.append(new_sco)
 
-    selecteddf = sorteddf[[smi in good_smis for smi in list(sorteddf["SMILES"])]]
+    selecteddf = sorteddf[[
+        smi in good_smis for smi in list(sorteddf["SMILES"])]]
     return (
         [Chem.MolFromSmiles(smi) for smi in good_smis],
         good_scos,
@@ -256,7 +264,9 @@ def select_top_based_on_criteria(
     )
 
 
-# borrowed code from example here: https://github.com/DrrDom/crem/blob/master/example/crem_example.ipynb and https://crem.readthedocs.io/en/latest/readme.html#
+# borrowed code from example here:
+# https://github.com/DrrDom/crem/blob/master/example/crem_example.ipynb
+# and https://crem.readthedocs.io/en/latest/readme.html#
 def generate_molecules(
     mols,
     clean_dir,
@@ -275,7 +285,7 @@ def generate_molecules(
     # use grow_mol with small max_atoms and small radius for very conservative changes
     # use mututate_mol with large change parameters for drastic changes
     if grow_or_mut == "grow":
-        if params == None:
+        if params is None:
             new_mols = [
                 list(grow_mol(mol, db_fname, return_mol=True, ncores=16))
                 for mol in mols
@@ -300,7 +310,7 @@ def generate_molecules(
                 for mol in mols
             ]
     elif grow_or_mut == "mut":
-        if params == None:
+        if params is None:
             new_mols = [
                 list(
                     mutate_mol(
@@ -341,8 +351,9 @@ def generate_molecules(
     good_new_mols = []
     frag_mol = Chem.MolFromSmiles(orig_frag_to_protect)
     for full_mol in new_mols:
-        if full_mol.HasSubstructMatch(frag_mol):  # contains entirely the fragment
-            if catalog != None:
+        if full_mol.HasSubstructMatch(
+                frag_mol):  # contains entirely the fragment
+            if catalog is not None:
                 entry = catalog.GetFirstMatch(
                     full_mol
                 )  # Get the first matching PAINS or Brenk
@@ -361,7 +372,8 @@ def generate_molecules(
 
     # get new scores
     smis, scores = get_molecule_scores(
-        new_mols, clean_dir + "all_mols_round_" + str(round_num), model_path, hit_column
+        new_mols, clean_dir + "all_mols_round_" +
+        str(round_num), model_path, hit_column
     )  # doesn't include the previous round
     best_score = max(scores)
     print(
@@ -507,7 +519,10 @@ def run_crem(
             Chem.MolToSmiles(mol) for mol in selected_top_mols_to_mutate
         ]
         savedf["scores"] = selected_top_mol_scos
-        savedf.to_csv(clean_dir + "original_starting_mols_round_0.csv", index=False)
+        savedf.to_csv(
+            clean_dir +
+            "original_starting_mols_round_0.csv",
+            index=False)
 
         for i in range(num_iters):
 
@@ -525,7 +540,8 @@ def run_crem(
             )
 
             # select top compounds to continue with
-            if np.max(param_set) >= 8:  # any parameters too big, must reduce the size
+            if np.max(
+                    param_set) >= 8:  # any parameters too big, must reduce the size
                 num_top_to_get = 2
                 num_random_to_get = 1
             (
@@ -546,6 +562,7 @@ def run_crem(
                 clean_dir + "all_mols_from_round_" + str(i) + ".csv", index=False
             )
             selecteddf.to_csv(
-                clean_dir + "original_starting_mols_round_" + str(i + 1) + ".csv",
+                clean_dir + "original_starting_mols_round_" +
+                str(i + 1) + ".csv",
                 index=False,
             )

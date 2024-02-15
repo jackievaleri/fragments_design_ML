@@ -93,7 +93,8 @@ def check_pains_brenk(df, mols, method="both"):
     catalog = FilterCatalog(params)
 
     def search_for_pains_or_brenk(mol):
-        entry = catalog.GetFirstMatch(mol)  # Get the first matching PAINS or Brenk
+        # Get the first matching PAINS or Brenk
+        entry = catalog.GetFirstMatch(mol)
         if entry is not None:
             return False  # contains bad
         else:
@@ -166,7 +167,10 @@ def filter_for_druglikeness(df, mols, smiles_column, criteria):
     elif criteria == "muegge":
         druglikeness = [ADME(smi).druglikeness_muegge() for smi in smis]
     else:
-        print("Criteria " + criteria + " not supported for drug-likeness filtering.")
+        print(
+            "Criteria " +
+            criteria +
+            " not supported for drug-likeness filtering.")
         return (df, mols)
     df = df[druglikeness]
     print("length of df satisfying druglikeness " + criteria + ": ", len(df))
@@ -237,7 +241,8 @@ def match_frags_and_mols(frags, cpd_mols):
     for frag_index, frag in enumerate(frags):
         matched_with_this_frag = []
         for full_mol_index, full_mol in enumerate(cpd_mols):
-            if full_mol.HasSubstructMatch(frag):  # contains entirely the fragment
+            if full_mol.HasSubstructMatch(
+                    frag):  # contains entirely the fragment
                 matched_with_this_frag.append(full_mol_index)
         if len(matched_with_this_frag) > 0:
             matches.append(matched_with_this_frag)
@@ -264,8 +269,15 @@ def check_for_complete_ring_fragments(
     ):
         frag = frags[frag_match_index]
         mols = [m for i, m in enumerate(cpd_mols) if i in full_mol_index_list]
-        keep_indices = [check_frag_does_not_disrupt_mol(frag, mol) for mol in mols]
-        new_index_list = [i for (i, v) in zip(full_mol_index_list, keep_indices) if v]
+        keep_indices = [
+            check_frag_does_not_disrupt_mol(
+                frag, mol) for mol in mols]
+        new_index_list = [
+            i for (
+                i,
+                v) in zip(
+                full_mol_index_list,
+                keep_indices) if v]
         if len(new_index_list) > 0:
             new_frag_match_indices.append(frag_match_index)
             new_cpd_match_indices_lists.append(new_index_list)
@@ -287,14 +299,17 @@ def compile_results_into_df(
     rank_df["fragment_SMILES"] = [
         mols[i].GetProp("SMILES") for i in list(rank_df["matched_fragments"])
     ]
-    rank_df["length_of_fragment"] = [mols[i].GetNumAtoms() for i in frag_match_indices]
+    rank_df["length_of_fragment"] = [mols[i].GetNumAtoms()
+                                     for i in frag_match_indices]
     rank_df["matched_molecules"] = cpd_match_indices_lists
-    rank_df["number_of_matched_molecules"] = [len(m) for m in cpd_match_indices_lists]
+    rank_df["number_of_matched_molecules"] = [
+        len(m) for m in cpd_match_indices_lists]
     rank_df["fragment_scores"] = [
         df.iloc[i, list(df.columns).index(frag_hit_column)] for i in frag_match_indices
     ]
     rank_df["full_molecule_scores"] = [
-        [cpd_df.iloc[i, list(cpd_df.columns).index(cpd_hit_column)] for i in sublist]
+        [cpd_df.iloc[i, list(cpd_df.columns).index(cpd_hit_column)]
+         for i in sublist]
         for sublist in cpd_match_indices_lists
     ]
     rank_df["average_molecule_score"] = [
@@ -303,7 +318,9 @@ def compile_results_into_df(
     ]
 
     # save rank_df
-    rank_df = rank_df.sort_values("number_of_matched_molecules", ascending=False)
+    rank_df = rank_df.sort_values(
+        "number_of_matched_molecules",
+        ascending=False)
     rank_df.to_csv(result_path + "candidates_after_matching.csv", index=False)
 
     print("Previewing dataframe so far...")
@@ -345,7 +362,8 @@ def check_for_toxicity(df, fragment_column, frag_mols):
     primary["primary_mean"] = primary["Mean_10uM"]
     tox = hepg2.merge(primary, on="Compound_ID", how="left")
     tox = tox.drop_duplicates("Compound_ID")
-    tox["both_means"] = [[i, j] for i, j in zip(tox["hepg2_mean"], tox["primary_mean"])]
+    tox["both_means"] = [[i, j]
+                         for i, j in zip(tox["hepg2_mean"], tox["primary_mean"])]
     tox_dict = dict(zip(list(tox["SMILES_x"]), list(tox["both_means"])))
 
     tox_smis = tox_dict.keys()
@@ -363,7 +381,8 @@ def check_for_toxicity(df, fragment_column, frag_mols):
             if tox_mol is None:
                 continue
             # this match can disrupt a ring - not picky about that
-            if tox_mol.HasSubstructMatch(frag):  # contains entirely the fragment
+            if tox_mol.HasSubstructMatch(
+                    frag):  # contains entirely the fragment
                 hepg2_matched_with_this_frag.append(tox_dict[tox_smi][0])
                 prim_matched_with_this_frag.append(tox_dict[tox_smi][1])
         hepg2_tox_matches.append(hepg2_matched_with_this_frag)
@@ -424,15 +443,18 @@ def check_for_fuzzy_frags_in_mols(frags, mols):
     return matches
 
 
-def check_for_frags_in_known_abx(df, fragment_index_column, frag_mols, abx_mols):
-    frags = [frag_mols[frag_index] for frag_index in list(df[fragment_index_column])]
+def check_for_frags_in_known_abx(
+        df, fragment_index_column, frag_mols, abx_mols):
+    frags = [frag_mols[frag_index]
+             for frag_index in list(df[fragment_index_column])]
     abx_matches = check_for_fuzzy_frags_in_mols(frags, abx_mols)
     df["matched_antibiotics"] = abx_matches
     return df
 
 
 # for two sets of mols - this is a typo btw, it should say get HIGHEST tanimoto
-def for_mol_list_get_lowest_tanimoto_to_closest_mol(cpd_mols, molecules_to_check):
+def for_mol_list_get_lowest_tanimoto_to_closest_mol(
+        cpd_mols, molecules_to_check):
     mols_fps = [Chem.RDKFingerprint(mo) for mo in cpd_mols]
     check_fps = [Chem.RDKFingerprint(mo) for mo in molecules_to_check]
     best_sims = []
@@ -495,15 +517,18 @@ def check_abx(
     abx, abx_mols = process_molset(abx_path, abx_smiles_col)
     print("number of abx: ", len(abx))
     abx_names = abx[abx_name_col]
-    df = check_for_frags_in_known_abx(df, fragment_index_column, frag_mols, abx_mols)
+    df = check_for_frags_in_known_abx(
+        df, fragment_index_column, frag_mols, abx_mols)
     df = check_full_cpd_similarity_to_closest_abx(
         df, full_cpd_index_column, cpd_mols, abx_mols
     )
     return (df, abx_mols, abx_names)
 
 
-def check_for_frags_in_train_set(df, fragment_index_column, frag_mols, ts_mols):
-    frags = [frag_mols[frag_index] for frag_index in list(df[fragment_index_column])]
+def check_for_frags_in_train_set(
+        df, fragment_index_column, frag_mols, ts_mols):
+    frags = [frag_mols[frag_index]
+             for frag_index in list(df[fragment_index_column])]
     ts_matches = check_for_fuzzy_frags_in_mols(frags, ts_mols)
     df["matched train set molecules"] = ts_matches
     return df
@@ -546,7 +571,8 @@ def check_training_set(
     )
     print("number of train set molecules: ", len(ts))
     ts_names = list(ts[train_set_name_col])
-    df = check_for_frags_in_train_set(df, "matched_fragments", frag_mols, ts_mols)
+    df = check_for_frags_in_train_set(
+        df, "matched_fragments", frag_mols, ts_mols)
     df = check_full_cpd_similarity_to_closest_train_set(
         df, "matched_molecules", cpd_mols, ts_mols
     )
@@ -562,9 +588,12 @@ def preprocess_cpds(full_cpd_df, compound_smi_col, compound_hit_col):
     all_fps = []
     all_scos = []
 
-    # this takes a long time but is necessary for making sure the analogue code below goes reasonably quickly
+    # this takes a long time but is necessary for making sure the analogue
+    # code below goes reasonably quickly
     for smi, sco in zip(
-        list(full_cpd_df[compound_smi_col]), list(full_cpd_df[compound_hit_col])
+        list(
+            full_cpd_df[compound_smi_col]), list(
+            full_cpd_df[compound_hit_col])
     ):
         try:
             mo = Chem.MolFromSmiles(smi)
@@ -573,7 +602,7 @@ def preprocess_cpds(full_cpd_df, compound_smi_col, compound_hit_col):
                 all_smis.append(smi)
                 all_fps.append(fp)
                 all_scos.append(sco)
-        except:
+        except BaseException:
             continue
     return (all_smis, all_fps, all_scos)
 
@@ -629,9 +658,11 @@ def find_analogous_cpds_with_and_without_frags(
                             all_cpds_without_frag.append(curr_mol)
                             currently_used_smis.append(smi)
                 # have to break out of both while loops
-                if len(all_cpds_with_frag) == N and len(all_cpds_without_frag) == N:
+                if len(all_cpds_with_frag) == N and len(
+                        all_cpds_without_frag) == N:
                     break
-            if len(all_cpds_with_frag) == N and len(all_cpds_without_frag) == N:
+            if len(all_cpds_with_frag) == N and len(
+                    all_cpds_without_frag) == N:
                 break
         starting_thresh = starting_thresh - 0.05
     return (
@@ -761,8 +792,10 @@ def clusterFps(fps, num_clusters):
     return clusterer.labels_, final_clusters
 
 
-def draw_mols(mols, legends, file_path, cut_down_size=False, black_and_white=False):
-    # code with help from the OG greg landrum: https://gist.github.com/greglandrum/d5f12058682f6b336905450e278d3399
+def draw_mols(mols, legends, file_path, cut_down_size=False,
+              black_and_white=False):
+    # code with help from the OG greg landrum:
+    # https://gist.github.com/greglandrum/d5f12058682f6b336905450e278d3399
     if cut_down_size:
         mols = mols[0:10]
         legends = legends[0:10]
@@ -813,18 +846,21 @@ def plot_final_fragments_with_all_info(
                 np.round(row["average_molecule_score"], 3),
             )
             print(
-                "number of matched broad800k molecules: ", len(row["matched_molecules"])
+                "number of matched broad800k molecules: ", len(
+                    row["matched_molecules"])
             )
             try:
                 print(
                     "average matched hepg2 growth: ",
-                    np.round(row["average_hepg2_tox_score_of_matched_molecules"], 3),
+                    np.round(
+                        row["average_hepg2_tox_score_of_matched_molecules"], 3),
                 )
                 print(
                     "average matched primary growth: ",
-                    np.round(row["average_primary_tox_score_of_matched_molecules"], 3),
+                    np.round(
+                        row["average_primary_tox_score_of_matched_molecules"], 3),
                 )
-            except:
+            except BaseException:
                 continue
             print("length of fragment: ", row["length_of_fragment"])
 
@@ -858,9 +894,11 @@ def plot_final_fragments_with_all_info(
         if len(full_mol_index_list) > 0:
             curr_match_names = [cpd_names[i] for i in full_mol_index_list]
             curr_match_names = [
-                x if type(x) is str else "nan" for x in curr_match_names
+                x if isinstance(x, str) else "nan" for x in curr_match_names
             ]
-            curr_match_scores = [float(x) for x in list(row["full_molecule_scores"])]
+            curr_match_scores = [
+                float(x) for x in list(
+                    row["full_molecule_scores"])]
             if len(abx_mols) > 0:
                 curr_tan_abxs = [
                     float(x)
@@ -919,7 +957,8 @@ def plot_final_fragments_with_all_info(
             draw_mols(
                 curr_match_mols,
                 legends,
-                output_folder + str(index) + "_" + row["fragment_SMILES"] + ".png",
+                output_folder + str(index) + "_" +
+                row["fragment_SMILES"] + ".png",
                 cut_down_size=True,
             )
         else:
@@ -939,7 +978,8 @@ def plot_final_fragments_with_all_info(
                 if display_inline_candidates:
                     print(
                         "avg difference of analogues with and without frag: ",
-                        np.round(row["average_difference_with_and_without_frag"], 3),
+                        np.round(
+                            row["average_difference_with_and_without_frag"], 3),
                     )
                     print(
                         "t test of analogues with and without frag: ",
@@ -947,7 +987,8 @@ def plot_final_fragments_with_all_info(
                     )
                     print("random analogues with frag:")
                     display(
-                        Draw.MolsToGridImage(cpds_w_frag, legends=ana_w_frag_legends)
+                        Draw.MolsToGridImage(
+                            cpds_w_frag, legends=ana_w_frag_legends)
                     )
                 draw_mols(
                     cpds_w_frag,
@@ -956,16 +997,19 @@ def plot_final_fragments_with_all_info(
                     cut_down_size=True,
                 )
 
-                ana_wo_frag_legends = [str(np.round(x, 3)) for x in scos_wo_frag]
+                ana_wo_frag_legends = [str(np.round(x, 3))
+                                       for x in scos_wo_frag]
                 if display_inline_candidates:
                     print("random analogues without frag:")
                     display(
-                        Draw.MolsToGridImage(cpds_wo_frag, legends=ana_wo_frag_legends)
+                        Draw.MolsToGridImage(
+                            cpds_wo_frag, legends=ana_wo_frag_legends)
                     )
                 draw_mols(
                     cpds_wo_frag,
                     ana_wo_frag_legends,
-                    output_folder + str(index) + "_random_mols_without_frag.png",
+                    output_folder + str(index) +
+                    "_random_mols_without_frag.png",
                     cut_down_size=True,
                 )
 
@@ -989,7 +1033,8 @@ def add_legends_to_compounds(df, smiles_column="SMILES", name_column="Name"):
             actual_row_num = str(row.loc["row_num"])
             actualrowname = str(row.loc[name_column])
             legend = (
-                str(actual_row_num) + ", " + actualrowname + "\n" + "SMILES: " + smi
+                str(actual_row_num) + ", " +
+                actualrowname + "\n" + "SMILES: " + smi
             )
         except Exception as e:
             print(e)
@@ -1017,14 +1062,16 @@ def extract_legends_and_plot(
         num_clusters = 1
     if num_clusters > len(df):
         num_clusters = len(df)
-    # code with help from the OG greg landrum: https://gist.github.com/greglandrum/d5f12058682f6b336905450e278d3399
+    # code with help from the OG greg landrum:
+    # https://gist.github.com/greglandrum/d5f12058682f6b336905450e278d3399
     molsPerRow = 4
     subImgSize = (500, 500)
 
     if murcko_scaffold:
         mols = [MurckoScaffold.GetScaffoldForMol(mol) for mol in mols]
     fps = [AllChem.GetMorganFingerprintAsBitVect(x, 2, 1024) for x in mols]
-    raw_cluster_labels, final_clusters = clusterFps(fps, num_clusters=num_clusters)
+    raw_cluster_labels, final_clusters = clusterFps(
+        fps, num_clusters=num_clusters)
 
     # show clusters
     img_list = []
@@ -1044,7 +1091,8 @@ def extract_legends_and_plot(
         d2d.drawOptions().legendFontSize = 100
         # d2d.drawOptions().useBWAtomPalette()
         d2d.DrawMolecules(
-            cluster_mols, legends=[mol.GetProp("legend") for mol in cluster_mols]
+            cluster_mols, legends=[
+                mol.GetProp("legend") for mol in cluster_mols]
         )  # assume mols have legend property
         d2d.FinishDrawing()
 
@@ -1067,7 +1115,8 @@ def cluster_mols_based_on_fragments(
     # find the fragments they match to
     for i, mol in enumerate(mols):
         frag_indices = []
-        for j, frag in enumerate(frags):  # only works bc all smiles make valid mols
+        for j, frag in enumerate(
+                frags):  # only works bc all smiles make valid mols
             if mol.HasSubstructMatch(frag):
                 frag_indices.append(j)
         matching_frag_indices.append(frag_indices)
@@ -1116,7 +1165,8 @@ def determine_optimal_clustering_number(df, max_num_clusters, smi_col):
             tan_array = [
                 DataStructs.BulkTanimotoSimilarity(i, cluster_fps) for i in cluster_fps
             ]
-            flattened_tan_array = [item for sublist in tan_array for item in sublist]
+            flattened_tan_array = [
+                item for sublist in tan_array for item in sublist]
             avg_dist.append(np.mean(flattened_tan_array))
             max_dist.append(np.min(flattened_tan_array))
         max_dists.append(np.average(max_dist))
@@ -1183,7 +1233,7 @@ def deduplicate_on_similar_pairs(
                 try:
                     if dup_pairs[i] is not j:
                         add_on = True
-                except:
+                except BaseException:
                     add_on = True
             if add_on:
                 dup_pairs[i] = j
@@ -1283,9 +1333,11 @@ def run_pipeline(
     print("\nMatching fragments in compounds...")
 
     ##### part 2: get all matching frag / molecule pairs #####
-    frag_match_indices, cpd_match_indices_lists = match_frags_and_mols(mols, cpd_mols)
+    frag_match_indices, cpd_match_indices_lists = match_frags_and_mols(
+        mols, cpd_mols)
     if frags_cannot_disrupt_rings:
-        # for all matching fragments, keep only matches that do not disrupt rings
+        # for all matching fragments, keep only matches that do not disrupt
+        # rings
         frag_match_indices, cpd_match_indices_lists = check_for_complete_ring_fragments(
             mols, frag_match_indices, cpd_mols, cpd_match_indices_lists
         )
@@ -1309,7 +1361,8 @@ def run_pipeline(
         mols,
         toxicity_threshold_require_presence,
     )
-    # check for frags within abx or cpds close to known abx - does not remove any cpds
+    # check for frags within abx or cpds close to known abx - does not remove
+    # any cpds
     if abx_path != "":
         rank_df, abx_mols, abx_names = check_abx(
             abx_path,
@@ -1324,7 +1377,8 @@ def run_pipeline(
     else:
         abx_mols = []
         abx_names = []
-    # check for frags within train set or molecules close to train set - again does not remove cpds
+    # check for frags within train set or molecules close to train set - again
+    # does not remove cpds
     if train_set_path != "":
         rank_df, ts_mols, ts_names = check_training_set(
             train_set_path,
@@ -1344,7 +1398,8 @@ def run_pipeline(
         ts_mols = []
         ts_names = []
     # check for fragments at least bigger than fragment_length_threshold
-    rank_df = rank_df[rank_df["length_of_fragment"] > fragment_length_threshold]
+    rank_df = rank_df[rank_df["length_of_fragment"]
+                      > fragment_length_threshold]
 
     ##### part 4: statistical significance on analogues test #####
     if analogues_pval_diff_thresh > 0 or analogues_absolute_diff_thresh > 0:
@@ -1367,7 +1422,9 @@ def run_pipeline(
 
     ##### part 5: visualization #####
     # save rank_df
-    rank_df = rank_df.sort_values("number_of_matched_molecules", ascending=False)
+    rank_df = rank_df.sort_values(
+        "number_of_matched_molecules",
+        ascending=False)
     rank_df.to_csv(
         result_path + "candidates_after_matching_and_filtering.csv", index=False
     )
@@ -1418,13 +1475,16 @@ def run_pipeline(
     all_matching_mol_indices = [
         x for l in list(rank_df["matched_molecules"]) for x in l
     ]
-    all_matching_mol_indices = list(set(all_matching_mol_indices))  # deduplicate
+    all_matching_mol_indices = list(
+        set(all_matching_mol_indices))  # deduplicate
     print("final number of molecules to test: ", len(all_matching_mol_indices))
 
     # save the names
-    all_matching_mols = [cpd_names[i] for i in list(set(all_matching_mol_indices))]
+    all_matching_mols = [cpd_names[i]
+                         for i in list(set(all_matching_mol_indices))]
     cpd_smiles = list(cpd_df[compound_smi_col])
-    all_matching_smis = [cpd_smiles[i] for i in list(set(all_matching_mol_indices))]
+    all_matching_smis = [cpd_smiles[i]
+                         for i in list(set(all_matching_mol_indices))]
 
     # and save the final molecules to df
     all_matching_mols_df = pd.DataFrame()
@@ -1433,7 +1493,8 @@ def run_pipeline(
 
     # add metadata to mols
     cpd_df_meta = cpd_df[[cpd_name_col, compound_hit_col]]
-    all_matching_mols_df = all_matching_mols_df.merge(cpd_df_meta, on=cpd_name_col)
+    all_matching_mols_df = all_matching_mols_df.merge(
+        cpd_df_meta, on=cpd_name_col)
     all_matching_mols_df.to_csv(
         result_path
         + "candidate_compounds_after_matching_and_filtering_with_metadata.csv"
@@ -1450,9 +1511,12 @@ def run_pipeline(
             test_name_col=purch_name_col,
             test_name_needs_split=purch_name_needs_split,
         )
-        print("length of df with purchasable mols: ", len(all_matching_mols_df))
+        print(
+            "length of df with purchasable mols: ",
+            len(all_matching_mols_df))
     if tested_before_path != "":
-        # make only molecules NOT IN previously-tested dataframes (make sure none of the molecules are exact matches to those tested before)
+        # make only molecules NOT IN previously-tested dataframes (make sure
+        # none of the molecules are exact matches to those tested before)
         all_matching_mols_df = filter_for_existing_mols(
             all_matching_mols_df,
             cpd_name_col,
@@ -1462,7 +1526,8 @@ def run_pipeline(
             test_name_needs_split=tested_before_name_needs_split,
         )
         print(
-            "length of df that has not been tested before: ", len(all_matching_mols_df)
+            "length of df that has not been tested before: ", len(
+                all_matching_mols_df)
         )
 
     # now do tanimoto filtering on antibiotics and training set
@@ -1495,17 +1560,22 @@ def run_pipeline(
             all_matching_mols_df["tan to nearest ts"] < cpd_sim_to_train_set
         ]
         print(
-            "length of all preds with tan ts < " + str(cpd_sim_to_train_set) + ": ",
+            "length of all preds with tan ts < " +
+            str(cpd_sim_to_train_set) + ": ",
             len(all_matching_mols_df),
         )
 
     ##### part 8: final round of visualization #####
     # cluster molecules based on fragment they have
-    frags = [Chem.MolFromSmiles(smi) for smi in list(rank_df["fragment_SMILES"])]
+    frags = [Chem.MolFromSmiles(smi)
+             for smi in list(rank_df["fragment_SMILES"])]
     all_matching_mols_df = cluster_mols_based_on_fragments(
         all_matching_mols_df, compound_smi_col, cpd_name_col, frags, result_path
     )
-    rank_df.to_csv(result_path + "FINAL_fragments_with_metadata.csv", index=False)
+    rank_df.to_csv(
+        result_path +
+        "FINAL_fragments_with_metadata.csv",
+        index=False)
 
     # group fragments and see clusters
     final_folder = result_path + "FINAL_mols_after_all_thresholding/"
@@ -1521,7 +1591,8 @@ def run_pipeline(
         murcko_scaffold=True,
         num_clusters=int(len(all_matching_mols_df) / 5),
     )
-    all_matching_mols_df.to_csv(final_folder + "final_proposed_molecules_to_order.csv")
+    all_matching_mols_df.to_csv(final_folder +
+                                "final_proposed_molecules_to_order.csv")
 
     return all_matching_mols_df
 
@@ -1575,9 +1646,11 @@ def mini_algo(
     print("\nMatching fragments in compounds...")
 
     ##### part 2: get all matching frag / molecule pairs #####
-    frag_match_indices, cpd_match_indices_lists = match_frags_and_mols(mols, cpd_mols)
+    frag_match_indices, cpd_match_indices_lists = match_frags_and_mols(
+        mols, cpd_mols)
     if frags_cannot_disrupt_rings:
-        # for all matching fragments, keep only matches that do not disrupt rings
+        # for all matching fragments, keep only matches that do not disrupt
+        # rings
         frag_match_indices, cpd_match_indices_lists = check_for_complete_ring_fragments(
             mols, frag_match_indices, cpd_mols, cpd_match_indices_lists
         )
@@ -1626,7 +1699,8 @@ def run_frag_only_pipeline(
     )
 
     ##### part 2: compile into df #####
-    rank_df = compile_frag_only_results_into_df(df, mols, result_path, fragment_hit_col)
+    rank_df = compile_frag_only_results_into_df(
+        df, mols, result_path, fragment_hit_col)
 
     ##### part 3: add additional data and filters #####
     # check for frags associated with toxicity in the in-house tox database
@@ -1638,7 +1712,8 @@ def run_frag_only_pipeline(
         toxicity_threshold_require_presence,
     )
     # check for fragments at least bigger than fragment_length_threshold
-    rank_df = rank_df[rank_df["length_of_fragment"] > fragment_length_threshold]
+    rank_df = rank_df[rank_df["length_of_fragment"]
+                      > fragment_length_threshold]
 
     ##### part 4: visualization #####
     # group fragments and see clusters
@@ -1695,17 +1770,18 @@ def process_fragments_after_receiving_available_compounds(
     train_set_thresh=0,
     train_set_greater_than=False,
 ):
-    ##### part 1: read back in fragments - these have already been processed
+    # part 1: read back in fragments - these have already been processed
     df = pd.read_csv(final_frags_path)
 
-    ##### part 2: filter on additional fragment characteristics before matching
+    # part 2: filter on additional fragment characteristics before matching
     # from crem_pipeline import calculateScoreThruToxModel
     if hepg2_frag_tox_cutoff > 0:
         # _, hepg2_toxs = calculateScoreThruToxModel(list(df['fragment_SMILES']), result_path, 'temp_predictions.csv', 'hepg2')
         # df['hepg2_frag_col']= hepg2_toxs
         df = df[df[hepg2_frag_col] < hepg2_frag_tox_cutoff]
         print(
-            "length of all frags with HepG2 tox < " + str(hepg2_frag_tox_cutoff) + ": ",
+            "length of all frags with HepG2 tox < " +
+            str(hepg2_frag_tox_cutoff) + ": ",
             len(df),
         )
     if prim_frag_tox_cutoff > 0:
@@ -1721,7 +1797,7 @@ def process_fragments_after_receiving_available_compounds(
     mols = [Chem.MolFromSmiles(smi) for smi in list(df["fragment_SMILES"])]
     df, mols = keep_valid_molecules(df, "fragment_SMILES")
 
-    ##### part 3: process new cpds dataframe
+    # part 3: process new cpds dataframe
     cpd_df, cpd_mols, _ = process_dataset(
         frag_or_cpd="cpd",
         path=new_cpds_path,
@@ -1734,8 +1810,9 @@ def process_fragments_after_receiving_available_compounds(
         remove_patterns=[],
     )
 
-    ##### part 4: matching
-    frag_match_indices, cpd_match_indices_lists = match_frags_and_mols(mols, cpd_mols)
+    # part 4: matching
+    frag_match_indices, cpd_match_indices_lists = match_frags_and_mols(
+        mols, cpd_mols)
     # for all matching fragments, keep only matches that do not disrupt rings
     frag_match_indices, cpd_match_indices_lists = check_for_complete_ring_fragments(
         mols, frag_match_indices, cpd_mols, cpd_match_indices_lists
@@ -1757,12 +1834,14 @@ def process_fragments_after_receiving_available_compounds(
     all_matching_mol_indices = [
         x for l in list(rank_df["matched_molecules"]) for x in l
     ]
-    all_matching_mol_indices = list(set(all_matching_mol_indices))  # deduplicate
+    all_matching_mol_indices = list(
+        set(all_matching_mol_indices))  # deduplicate
     print("final number of molecules to test: ", len(all_matching_mol_indices))
 
     # save the names
     cpd_smiles = list(cpd_df[compound_smi_col])
-    all_matching_smis = [cpd_smiles[i] for i in list(set(all_matching_mol_indices))]
+    all_matching_smis = [cpd_smiles[i]
+                         for i in list(set(all_matching_mol_indices))]
 
     # and save the final molecules to df
     all_matching_mols_df = pd.DataFrame()
@@ -1770,7 +1849,8 @@ def process_fragments_after_receiving_available_compounds(
 
     # add metadata to mols
     cpd_df_meta = pd.read_csv(new_cpds_path)
-    all_matching_mols_df = all_matching_mols_df.merge(cpd_df_meta, on=compound_smi_col)
+    all_matching_mols_df = all_matching_mols_df.merge(
+        cpd_df_meta, on=compound_smi_col)
     all_matching_mols_df.to_csv(
         result_path
         + "candidate_compounds_after_matching_and_filtering_with_metadata.csv"
@@ -1787,7 +1867,8 @@ def process_fragments_after_receiving_available_compounds(
     ):
         frag_indices = []
         for j, frag in enumerate(
-            [Chem.MolFromSmiles(smi) for smi in list(rank_df["fragment_SMILES"])]
+            [Chem.MolFromSmiles(smi)
+             for smi in list(rank_df["fragment_SMILES"])]
         ):  # only works bc all smiles make valid mols
             if mol.HasSubstructMatch(frag):
                 frag_indices.append(j)
@@ -1805,7 +1886,8 @@ def process_fragments_after_receiving_available_compounds(
         "matched_molecules",
         cpd_mols,
     )
-    # check for frags within train set or molecules close to train set - again does not remove cpds
+    # check for frags within train set or molecules close to train set - again
+    # does not remove cpds
     rank_df, ts_mols, ts_names = check_training_set(
         train_set_path,
         train_set_smiles_col,
@@ -1849,7 +1931,8 @@ def check_full_cpd_similarity_to_closest_selected_mols(
     selected_mols = [
         Chem.MolFromSmiles(smi) for smi in list(selected_mols_df[compound_smi_col])
     ]
-    tan_scores = for_mol_list_get_lowest_tanimoto_to_closest_mol(df_mols, selected_mols)
+    tan_scores = for_mol_list_get_lowest_tanimoto_to_closest_mol(
+        df_mols, selected_mols)
     return tan_scores
 
 
@@ -1868,8 +1951,10 @@ def perform_filtering_algo(
     total_groups = 0
     # if all filtering steps leave 1 compound, keep that 1 compound
     # if all filtering steps leave 0 compounds, leave out the filtering steps that remove the 1 remaining compound
-    # if all filtering steps leave >1 compound, all them to a list for another round of selection
-    for frag_i, smalldf in all_matching_mols_df.groupby("matching_frags_strings"):
+    # if all filtering steps leave >1 compound, all them to a list for another
+    # round of selection
+    for frag_i, smalldf in all_matching_mols_df.groupby(
+            "matching_frags_strings"):
         total_groups = total_groups + 1
         selected_fragment = False
         smalldf[
@@ -1895,7 +1980,8 @@ def perform_filtering_algo(
                 continue
             if not selected_fragment:
                 selected_fragment = True
-                selected_mols_df = pd.concat([selected_mols_df, pd.DataFrame(row).T])
+                selected_mols_df = pd.concat(
+                    [selected_mols_df, pd.DataFrame(row).T])
                 break
         if (
             not selected_fragment

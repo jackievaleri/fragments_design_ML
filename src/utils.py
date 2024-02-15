@@ -19,13 +19,13 @@ from rdkit.Chem.Draw import rdMolDraw2D
 from rdkit.Chem import rdDepictor
 from copy import deepcopy
 
-#### Part 1: t-SNE Helper Functions
+# Part 1: t-SNE Helper Functions
 
 
 def convert_df_smis_to_fps(df, smi_column="SMILES"):
     smiles = list(df[smi_column])
-    mols = [Chem.MolFromSmiles(x) for x in smiles if type(x) is not float]
-    smis = [x for x in smiles if type(x) is not float]
+    mols = [Chem.MolFromSmiles(x) for x in smiles if not isinstance(x, float)]
+    smis = [x for x in smiles if not isinstance(x, float)]
     fps = [Chem.RDKFingerprint(x) for x in mols if x is not None]
     smis = [x for x, y in zip(smis, mols) if y is not None]
     return (smis, fps)
@@ -35,7 +35,8 @@ def make_joined_list_of_fps_and_labels(list_of_lists, labels_in_order):
     fp_list = []
     lab_list = []
     for lab, currlist in zip(labels_in_order, list_of_lists):
-        fp_list.extend(currlist)  # could be slow for long lists or many long lists
+        # could be slow for long lists or many long lists
+        fp_list.extend(currlist)
         lab_list.extend([lab] * len(currlist))
     return (fp_list, lab_list)
 
@@ -55,7 +56,7 @@ def tsne_from_pca_components(fp_list, fp_labels):
 
 def make_tsne_figure(tsne_df, fig_path, colors=None):
     plt.figure(figsize=(8, 5), dpi=300)
-    if colors == None:
+    if colors is None:
         palette = sns.color_palette("hls", len(set(fp_labels)))
     else:
         ordered_labs = tsne_df.drop_duplicates("label")
@@ -70,7 +71,7 @@ def make_tsne_figure(tsne_df, fig_path, colors=None):
     plt.show()
 
 
-#### Part 2: Model evaluation
+# Part 2: Model evaluation
 
 
 def aupr(y_true, y_pred):
@@ -88,17 +89,19 @@ def evaluate_model(
 
     aupr(actual, predicted)
 
-    predicted_bin = [1.0 if x > cutoff_for_positive else 0.0 for x in list(predicted)]
+    predicted_bin = [
+        1.0 if x > cutoff_for_positive else 0.0 for x in list(predicted)]
     print("recall: ")
     print(sklearn.metrics.recall_score(actual, predicted_bin))
     print("precision: ")
     print(sklearn.metrics.precision_score(actual, predicted_bin))
 
 
-#### Part 3: Helper functions
+# Part 3: Helper functions
 
 
-def draw_mols_with_highlight(mols, frag, legends, file_path, cut_down_size=False):
+def draw_mols_with_highlight(
+        mols, frag, legends, file_path, cut_down_size=False):
 
     patt = Chem.MolFromSmiles(frag)
     hit_ats = [mol.GetSubstructMatch(patt) for mol in mols]
@@ -111,7 +114,8 @@ def draw_mols_with_highlight(mols, frag, legends, file_path, cut_down_size=False
             hit_bond.append(mol.GetBondBetweenAtoms(aid1, aid2).GetIdx())
         hit_bonds.append(hit_bond)
 
-    # code with help from the OG greg landrum: https://gist.github.com/greglandrum/d5f12058682f6b336905450e278d3399
+    # code with help from the OG greg landrum:
+    # https://gist.github.com/greglandrum/d5f12058682f6b336905450e278d3399
     if cut_down_size:
         mols = mols[0:10]
         legends = legends[0:10]
@@ -185,7 +189,8 @@ def proc_interpret_df(df):
     return newdf
 
 
-# code adapted from https://stackoverflow.com/questions/69735586/how-to-highlight-the-substructure-of-a-molecule-with-thick-red-lines-in-rdkit-as
+# code adapted from
+# https://stackoverflow.com/questions/69735586/how-to-highlight-the-substructure-of-a-molecule-with-thick-red-lines-in-rdkit-as
 def interpretation_increase_resolution(
     smi_big, smi_substr, size=(400, 200), kekulize=True, legend="", file_path=""
 ):
@@ -195,7 +200,8 @@ def interpretation_increase_resolution(
     substructure = deepcopy(substructure)
     rdDepictor.Compute2DCoords(mol)
     if kekulize:
-        Chem.Kekulize(mol, clearAromaticFlags=True)  # Localize the benzene ring bonds
+        # Localize the benzene ring bonds
+        Chem.Kekulize(mol, clearAromaticFlags=True)
         Chem.Kekulize(substructure, clearAromaticFlags=True)
 
         mol = Chem.RemoveHs(mol, sanitize=True)
@@ -217,7 +223,8 @@ def interpretation_increase_resolution(
             17,
         ),
     }
-    # highlightAtoms expects only one tuple, not tuple of tuples. So it needs to be merged into a single tuple
+    # highlightAtoms expects only one tuple, not tuple of tuples. So it needs
+    # to be merged into a single tuple
     matches = sum(mol.GetSubstructMatches(substructure), ())
     mod_smi = smi_big + "." + smi_substr
     if len(matches) == 0:
