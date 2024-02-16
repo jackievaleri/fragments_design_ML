@@ -1,9 +1,5 @@
-#### Imports ####
-import cairosvg
-import sascorer
-from rdkit.Chem import RDConfig
-from crem.crem import mutate_mol, grow_mol
-from multiprocessing import Pool
+"""CReM pipeline."""
+
 import pandas as pd
 import subprocess
 import numpy as np
@@ -11,44 +7,48 @@ import random
 import os
 import tqdm
 import sys
+import cairosvg
+from crem.crem import mutate_mol, grow_mol
 
 from rdkit import Chem
-from rdkit.Chem import AllChem
-from rdkit.Chem import Draw, DataStructs
+from rdkit.Chem import AllChem, Draw, DataStructs, RDConfig
 from rdkit.Chem.FilterCatalog import FilterCatalog, FilterCatalogParams
 from rdkit.Chem.Draw import IPythonConsole
-from IPython.display import SVG, Image
+
+# shut off warnings
 from rdkit import RDLogger
+RDLogger.DisableLog("rdApp.*")
 
-RDLogger.DisableLog("rdApp.*")  # shut off warnings
+sys.path.append(os.path.join(RDConfig.RDContribDir, "SA_Score"))
+import sascorer  # noqa
 
-sys.path.append(
-    os.path.join(RDConfig.RDContribDir, "SA_Score")
-)  # now you can import sascore!
-
-#### Global Variables ####
 
 IPythonConsole.molSize = (400, 300)
 IPythonConsole.ipython_useSVG = True
-
-# specify the path to the fragment database (replace with your actual path)
 db_fname = "../data/static_datasets/replacements02_sc2.5.db"
-
-# gate on tanimoto similarity to abx
 abx = pd.read_csv(
-    "../data/static_datasets/04052022_CLEANED_v5_antibiotics_across_many_classes.csv"
+    "../data/static_datasets/04052022_CLEANED_v5_antibiotics_across_many_classes.csv"  # noqa
 )
 abx_smiles = list(abx["Smiles"])
 abx_fps = [Chem.RDKFingerprint(Chem.MolFromSmiles(smi)) for smi in abx_smiles]
-
-#### Helper Functions ####
-
-# modified for NG model where have to save features ahead of time
 
 
 def calculateScoreThruChemprop(
     patterns, results_folder_name, results_file_name, model_path, hit_column
 ):
+    """
+    Calculate scores through Chemprop model.
+
+    This function prepares data, runs predictions through a Chemprop model,
+    and returns the predicted SMILES and corresponding scores.
+
+    :param patterns: List of SMILES patterns to calculate scores for
+    :param results_folder_name: Path to the folder where results will be saved
+    :param results_file_name: Name of the file to save results
+    :param model_path: Path to the directory containing the Chemprop model
+    :param hit_column: Name of the column containing hit scores in predictions
+    :return: List containing two lists - predicted SMILES and scores
+    """
     # write to clean csv
     clean_name = results_folder_name + results_file_name
     new_df = pd.DataFrame(patterns, columns=["SMILES"])
@@ -56,7 +56,8 @@ def calculateScoreThruChemprop(
 
     # use subprocess to run command line thru jupyter notebook - could easily
     # just run command line but this is automated
-    activate_command = "source ~/opt/anaconda3/bin/activate; conda activate chemprop; "
+    activate_command = "source ~/opt/anaconda3/bin/activate; " + \
+        "conda activate chemprop; "
     genML_folder = "../"  # from chemprop folder
 
     if "gonorrhea" in model_path:
@@ -95,14 +96,17 @@ def calculateScoreThruChemprop(
             + " --preds_path "
             + genML_folder
             + clean_name
-            + " --features_generator rdkit_2d_normalized --no_features_scaling --smiles_columns SMILES"
+            + " --features_generator rdkit_2d_normalized "
+            + "--no_features_scaling --smiles_columns SMILES"
         )
         full_command = activate_command + run_command
 
-    test = subprocess.run(
-        full_command, cwd="../models/chemprop-master/", shell=True, capture_output=True
+    subprocess.run(
+        full_command,
+        cwd="../models/chemprop-master/",
+        shell=True,
+        capture_output=True
     )
-    # print(test)
     preds = pd.read_csv(clean_name)
 
     new_smis = list(preds["SMILES"])
@@ -114,7 +118,18 @@ def calculateScoreThruChemprop(
 
 
 def get_molecule_scores(ms, intermediate_folder, model_path, hit_column):
-    # get the score of the model from the relevant path
+    """
+    Get scores for a list of molecules using a Chemprop model.
+
+    This function converts RDKit molecules to SMILES, calculates scores
+    using a Chemprop model, and returns the SMILES and corresponding scores.
+
+    :param ms: List of RDKit molecules
+    :param intermediate_folder: Path to the folder for intermediate results
+    :param model_path: Path to the directory containing the Chemprop model
+    :param hit_column: Name of the column containing hit scores in predictions
+    :return: Tuple containing two lists - predicted SMILES and scores
+    """
     smis = [Chem.MolToSmiles(m) for m in ms]
     smis, scores = calculateScoreThruChemprop(
         smis, intermediate_folder, "_scores.csv", model_path, hit_column
@@ -125,6 +140,20 @@ def get_molecule_scores(ms, intermediate_folder, model_path, hit_column):
 def calculateScoreThruToxModel(
     patterns, results_folder_name, results_file_name, tox_model
 ):
+    """
+    Calculate toxicity scores using a specified Chemprop model.
+
+    This function writes patterns to a CSV file, runs toxicity prediction
+    using a Chemprop model, and returns SMILES and corresponding scores.
+    Note that this function is different because it is for
+    direct use in the CReM genetic algorithm pipeline.
+
+    :param patterns: List of SMILES patterns
+    :param results_folder_name: Name of the folder to store results
+    :param results_file_name: Name of the file to store results
+    :param tox_model: Type of toxicity model ('primary' or 'hepg2')
+    :return: Tuple containing two lists - predicted SMILES and toxicity scores
+    """
     # write to clean csv
     clean_name = results_folder_name + tox_model + "_" + results_file_name
     new_df = pd.DataFrame(patterns, columns=["SMILES"])
@@ -132,7 +161,7 @@ def calculateScoreThruToxModel(
 
     # use subprocess to run command line thru jupyter notebook - could easily
     # just run command line but this is automated
-    activate_command = "source ~/opt/anaconda3/bin/activate; conda activate chemprop; "
+    activate_command = "source ~/opt/anaconda3/bin/activate; conda activate chemprop; "  # noqa
     genML_folder = "../"  # from chemprop folder
 
     if tox_model == "primary":
@@ -148,11 +177,14 @@ def calculateScoreThruToxModel(
         + " --preds_path "
         + genML_folder
         + clean_name
-        + " --features_generator rdkit_2d_normalized --no_features_scaling --smiles_columns SMILES"
+        + " --features_generator rdkit_2d_normalized --no_features_scaling --smiles_columns SMILES"  # noqa
     )
     full_command = activate_command + run_command
     test = subprocess.run(
-        full_command, cwd="../models/chemprop-master/", shell=True, capture_output=True
+        full_command,
+        cwd="../models/chemprop-master/",
+        shell=True,
+        capture_output=True
     )
     print(test)
     preds = pd.read_csv(clean_name)
@@ -166,8 +198,15 @@ def calculateScoreThruToxModel(
 
 
 def get_sim(ms, ref_fps):
-    # ms - list of molecules
-    # ref_fps - list of fingerprints of reference molecules
+    """
+    Calculate similarity scores between a list of molecules and reference
+    fingerprints.
+
+    :param ms: List of molecules
+    :param ref_fps: List of reference fingerprints
+    :return: List of tuples containing similarity scores and indices of the
+             most similar reference fingerprints
+    """
     output = []
     fps1 = [AllChem.GetMorganFingerprintAsBitVect(m, 2) for m in ms]
     for fp in fps1:
@@ -180,6 +219,19 @@ def get_sim(ms, ref_fps):
 def select_top_based_on_criteria(
     smis, scores, regular_score=False, num_top_to_get=5, num_random_to_get=5
 ):
+    """
+    Selects top compounds based on certain criteria.
+
+    Allows for naive regular Chemprop score or a weighted ('modified') score.
+
+    :param smis: List of SMILES strings
+    :param scores: List of scores corresponding to the SMILES strings
+    :param regular_score: Boolean flag indicating if regular scores are used
+    :param num_top_to_get: Number of top compounds to select
+    :param num_random_to_get: Number of random compounds to select
+    :return: Tuple containing selected molecules, their scores,
+        sorted df, and selected df
+    """
     # score will be chemprop score
     sorteddf = pd.DataFrame()
     sorteddf["SMILES"] = smis
@@ -187,6 +239,7 @@ def select_top_based_on_criteria(
     sorteddf = sorteddf.drop_duplicates(subset="SMILES").reset_index()
     sorteddf = sorteddf.sort_values("scores", ascending=False)
 
+    # modified score
     if not regular_score:
         # add synthesizability score
         mols = [Chem.MolFromSmiles(smi) for smi in list(sorteddf["SMILES"])]
@@ -219,7 +272,7 @@ def select_top_based_on_criteria(
 
         # calculate adjusted scores
         adj_scores = []
-        for i, row in sorteddf.iterrows():
+        for _, row in sorteddf.iterrows():
             chempropsco = row["scores"]
             sascore = row["SAScore"]
             tansim = row["max_tan_sim_to_abx"]
@@ -229,15 +282,20 @@ def select_top_based_on_criteria(
                 ((sascore / 10.0) + tansim + hepg2 + prim)
             adj_scores.append(adj_score)
         sorteddf["adjusted_score"] = adj_scores
-    else:  # regular score
+
+    # regular score
+    else:
         sorteddf["adjusted_score"] = list(sorteddf["scores"])
     sorteddf = sorteddf.sort_values(
         "adjusted_score",
         ascending=False).reset_index()
 
+    # now select based on score
     if len(sorteddf) < num_top_to_get + num_random_to_get:
         good_smis = list(sorteddf["SMILES"])
         good_scos = list(sorteddf["adjusted_score"])
+        selecteddf = sorteddf[[
+            smi in good_smis for smi in list(sorteddf["SMILES"])]]
         return (
             [Chem.MolFromSmiles(smi) for smi in good_smis],
             good_scos,
@@ -264,9 +322,6 @@ def select_top_based_on_criteria(
     )
 
 
-# borrowed code from example here:
-# https://github.com/DrrDom/crem/blob/master/example/crem_example.ipynb
-# and https://crem.readthedocs.io/en/latest/readme.html#
 def generate_molecules(
     mols,
     clean_dir,
@@ -278,12 +333,38 @@ def generate_molecules(
     model_path="",
     hit_column="hit",
 ):
+    """
+    Generate molecules based on the given criteria.
+
+    Adapted from examples here:
+    https://github.com/DrrDom/crem/blob/master/example/crem_example.ipynb
+    and https://crem.readthedocs.io/en/latest/readme.html#
+
+    I decided to use grow_mol with small max_atoms and radius
+    for conservative changes to a molecule
+    and use mututate_mol with large change parameters for drastic changes.
+    Documentation for grow_mol here:
+    https://crem.readthedocs.io/en/latest/operations.html
+
+    :param mols: List of RDKit molecules.
+    :param clean_dir: Directory to save generated molecules and images.
+    :param orig_frag_to_protect: SMILES of the original fragment to protect.
+    :param round_num: Iteration number.
+    :param grow_or_mut: Method for generating molecules, either 'grow' or 'mut'
+        Defaults to 'grow'.
+    :param params: Parameters for the growth or mutation operation.
+        Defaults to None.
+    :param catalog: Object containing filters for PAINS and Brenk alerts.
+        Defaults to None.
+    :param model_path: Path to the model used for scoring molecules.
+        Defaults to "".
+    :param hit_column: Name of the column containing hit information.
+        Defaults to "hit".
+    :return: A tuple containing SMILES and scores of the generated molecules.
+    """
     print("-----------------------------")
     print("iteration number: ", round_num)
 
-    # grow_mol documentation: https://crem.readthedocs.io/en/latest/operations.html
-    # use grow_mol with small max_atoms and small radius for very conservative changes
-    # use mututate_mol with large change parameters for drastic changes
     if grow_or_mut == "grow":
         if params is None:
             new_mols = [
@@ -314,7 +395,10 @@ def generate_molecules(
             new_mols = [
                 list(
                     mutate_mol(
-                        Chem.AddHs(mol), db_name=db_fname, return_mol=True, ncores=16
+                        Chem.AddHs(mol),
+                        db_name=db_fname,
+                        return_mol=True,
+                        ncores=16
                     )
                 )
                 for mol in mols
@@ -342,7 +426,7 @@ def generate_molecules(
                 for mol in mols
             ]
 
-    new_mols = [x for l in new_mols for x in l]
+    new_mols = [x for xlist in new_mols for x in xlist]
     new_mols = [Chem.RemoveHs(j[1]) for j in new_mols]
     print("molecules generated:", len(new_mols))
 
@@ -377,7 +461,7 @@ def generate_molecules(
     )  # doesn't include the previous round
     best_score = max(scores)
     print(
-        "molecules generated containing fragment + passing PAINS, Brenk filters:",
+        "molecules generated containing fragment + passing PAINS, Brenk filters:",  # noqa
         len(new_mols),
     )
     print("best score:", np.round(best_score, 3))
@@ -403,6 +487,37 @@ def run_crem(
     model_path="",
     hit_column="hit",
 ):
+    """
+    Run the CREM algorithm with our data and parameters.
+
+    :param out_dir: Directory to save output files.
+    :param orig_frag_smi: SMILES string of the original fragment to protect.
+    :param orig_mol_smi: SMILES string of the original molecule.
+    :param max_atom_range: Range of maximum number of atoms in the fragment.
+    :param min_atom_range: Range of minimum number of atoms in the fragment.
+    :param radius_range: Range of radius of context for replacement.
+    :param min_inc_range: Range of minimum change in number of heavy atoms
+        for mutation. Defaults to [2].
+    :param max_inc_range: Range of maximum change in number of heavy atoms
+        for mutation. Defaults to [-2].
+    :param num_iters: Number of iterations. Defaults to 5.
+    :param method: Method for generating molecules, either 'grow' or 'mut'.
+        Defaults to 'grow'.
+    :param regular_score: Whether to use regular scores.
+        Defaults to True.
+    :param num_top_to_get: Number of top molecules to select.
+        Defaults to 5.
+    :param num_random_to_get: Number of random molecules to select.
+        Defaults to 5.
+    :param cpd_filter: Compound filter type, either 'pains', 'brenk',
+        'both', or 'none'. Defaults to 'both'.
+    :param model_path: Path to the model used for scoring molecules.
+        Defaults to "".
+    :param hit_column: Name of the column containing hit information.
+        Defaults to "hit".
+
+    :return: None
+    """
 
     if method == "grow":
         new_big_dir = out_dir + "grow/"
@@ -428,17 +543,20 @@ def run_crem(
             ma
         ) in (
             max_atom_range
-        ):  # max_atoms – maximum number of atoms in the fragment which will replace H
+        ):  # max_atoms – maximum number of atoms in the fragment
+            # which will replace H
             for (
                 mi
             ) in (
                 min_atom_range
-            ):  # min_atoms – minimum number of atoms in the fragment which will replace H
+            ):  # min_atoms – minimum number of atoms in the fragment
+                # which will replace H
                 for (
                     ra
                 ) in (
                     radius_range
-                ):  # radius – radius of context which will be considered for replacement
+                ):  # radius – radius of context which will be considered
+                    # for replacement
                     param_list.append([ma, mi, ra])
     else:
         # mutate params
@@ -446,27 +564,37 @@ def run_crem(
             mi_s
         ) in (
             min_atom_range
-        ):  # min_size – minimum number of heavy atoms in a fragment to replace. If 0 - hydrogens will be replaced (if they are explicit)
+        ):  # min_size – minimum number of heavy atoms
+            # in a fragment to replace. If 0 - hydrogens
+            # will be replaced (if they are explicit)
             for (
                 ma_s
             ) in (
                 max_atom_range
-            ):  # max_size – maximum number of heavy atoms in a fragment to replace
+            ):  # max_size – maximum number of heavy atoms
+                # in a fragment to replace
                 for (
                     mi
                 ) in (
                     min_inc_range
-                ):  # min_inc – minimum change of a number of heavy atoms in replacing fragments to a number of heavy atoms in replaced one. Negative value means that the replacing fragments would be smaller than the replaced one on a specified number of heavy atoms
+                ):  # min_inc – minimum change of a number of heavy atoms
+                    # in replacing fragments to a number of heavy atoms.
+                    # Negative value means that the replacing fragments
+                    # would be smaller than the replaced one on a
+                    # specified number of heavy atoms.
                     for (
                         ma
                     ) in (
                         max_inc_range
-                    ):  # max_inc – maximum change of a number of heavy atoms in replacing fragments to a number of heavy atoms in replaced one
+                    ):  # max_inc – maximum change of a number of heavy atoms
+                        # in replacing fragments to a number of heavy atoms
+                        # in replaced one.
                         for (
                             ra
                         ) in (
                             radius_range
-                        ):  # radius – radius of context which will be considered for replacement
+                        ):  # radius – radius of context which will be
+                            # considered for replacement
                             param_list.append([mi_s, ma_s, mi, ma, ra])
 
     for param_set in tqdm.tqdm(param_list):
@@ -497,9 +625,9 @@ def run_crem(
             clean_dir = out_dir + "mutate/" + name + "/"
 
         os.mkdir(clean_dir)
-        print("***************************************************************")
+        print("***************************************************************")  # noqa
         print(name)
-        print("***************************************************************")
+        print("***************************************************************")  # noqa
 
         # actually run the algorithm
         orig_mol = Chem.MolFromSmiles(orig_mol_smi)
@@ -541,7 +669,7 @@ def run_crem(
 
             # select top compounds to continue with
             if np.max(
-                    param_set) >= 8:  # any parameters too big, must reduce the size
+                    param_set) >= 8:  # any parameters too big, must reduce
                 num_top_to_get = 2
                 num_random_to_get = 1
             (
@@ -559,7 +687,8 @@ def run_crem(
 
             # save the last mols generated
             alldf.to_csv(
-                clean_dir + "all_mols_from_round_" + str(i) + ".csv", index=False
+                clean_dir + "all_mols_from_round_" + str(i) + ".csv",
+                index=False
             )
             selecteddf.to_csv(
                 clean_dir + "original_starting_mols_round_" +
