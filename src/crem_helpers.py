@@ -12,6 +12,8 @@ from rdkit import Chem
 from rdkit.Chem import DataStructs
 from rdkit.Chem import RDConfig
 
+from filters import process_molset
+
 sys.path.append(os.path.join(RDConfig.RDContribDir, "SA_Score"))
 import sascorer  # noqa
 
@@ -70,39 +72,6 @@ def calculateScoreThruToxModel(
         return [new_smis, new_scores]
     else:
         return []
-
-
-def process_molset(path,
-                   smi_col,
-                   hit_col="",
-                   just_actives=False,
-                   hit_thresh=0):
-    """
-    Function to process a set of compounds based on their hit scores.
-
-    This function takes a file path, SMILES column name, optional hit column,
-    a flag to select only actives, and an optional hit threshold as input.
-    It reads a CSV file, filters the data based on hit threshold if necessary,
-    converts SMILES to RDKit Mol objects, and returns a DataFrame and mols.
-
-    :param path: File path
-    :param smi_col: Name of the SMILES column
-    :param hit_col: Name of the hit column (default: '')
-    :param just_actives: Flag to filter only actives (default: False)
-    :param hit_thresh: Hit threshold for filtering (default: 0)
-    :return: DataFrame and list of RDKit Mol objects
-    """
-    if path == "":
-        print("No data have been provided for a comparison.")
-    df = pd.read_csv(path)
-    if just_actives:
-        df = df[df[hit_col] < hit_thresh]
-        df = df.reset_index(drop=True)
-    mols = [Chem.MolFromSmiles(smi) for smi in list(df[smi_col])]
-    keep_indices = [m is not None for m in mols]
-    df = df[keep_indices]
-    mols = [m for i, m in enumerate(mols) if keep_indices[i]]
-    return df, mols
 
 
 def collate_crem_molecules_from_multiple_rounds(

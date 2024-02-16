@@ -11,7 +11,7 @@ import cairosvg
 from crem.crem import mutate_mol, grow_mol
 
 from rdkit import Chem
-from rdkit.Chem import AllChem, Draw, DataStructs, RDConfig
+from rdkit.Chem import Draw, DataStructs, RDConfig
 from rdkit.Chem.FilterCatalog import FilterCatalog, FilterCatalogParams
 from rdkit.Chem.Draw import IPythonConsole
 
@@ -195,25 +195,6 @@ def calculateScoreThruToxModel(
         return [new_smis, new_scores]
     else:
         return []
-
-
-def get_sim(ms, ref_fps):
-    """
-    Calculate similarity scores between a list of molecules and reference
-    fingerprints.
-
-    :param ms: List of molecules
-    :param ref_fps: List of reference fingerprints
-    :return: List of tuples containing similarity scores and indices of the
-             most similar reference fingerprints
-    """
-    output = []
-    fps1 = [AllChem.GetMorganFingerprintAsBitVect(m, 2) for m in ms]
-    for fp in fps1:
-        v = DataStructs.BulkTanimotoSimilarity(fp, ref_fps)
-        i = np.argmax(v)
-        output.append([v[i], i])
-    return output
 
 
 def select_top_based_on_criteria(

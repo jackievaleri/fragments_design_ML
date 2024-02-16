@@ -48,6 +48,7 @@ def for_mol_list_get_highest_tanimoto_to_closest_mol(
     This function calculates the Tanimoto similarity between each molecule.
     (`cpd_mols`) and a set of molecules to check (`molecules_to_check`),
     and returns the highest similarity score for each molecule in `cpd_mols`.
+    Returns -1 for None mols.
 
     :param cpd_mols: List of RDKit Mol objects to compare
     :param molecules_to_check: List of RDKit Mol objects to check against
